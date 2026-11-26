@@ -24,7 +24,8 @@ SERIES = {
 
 def fetch_series(sess, sid: str, days: int = 400) -> list[tuple[str, float]]:
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-    r = get(sess, FRED, params={"id": sid, "cosd": start}, timeout=30)
+    # FRED는 브라우저형 User-Agent 요청을 막는다(2026-11 확인) → 일반 클라이언트 UA로 요청
+    r = get(sess, FRED, params={"id": sid, "cosd": start}, timeout=60, headers={"User-Agent": "curl/8.5.0"})
     rows = []
     for row in csv.reader(io.StringIO(r.text)):
         if len(row) < 2 or not row[0][:4].isdigit():
