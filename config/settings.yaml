@@ -1,0 +1,12 @@
+# 데이터 원천 설정
+sheet:
+  id: 1kZV4OZqHtUjB4s2s3ykgMIhzM9XK3dO8oF9TFssp-5o
+  gid: 167757265          # 메인 탭
+  # 시트는 '링크가 있는 모든 사용자: 뷰어' 공유 상태여야 CSV로 읽힙니다.
+
+collect:
+  daily_count: 300        # 차트용 일봉 개수(약 1년 + 여유)
+  chart_days: 250         # 화면 차트에 쓰는 일수(1년)
+  use_pykrx_fallback: true
+  history_keep_days: 180  # 컨센서스 변화 추적용 스냅샷 보관 기간
+  min_price_coverage: 0.5 # 현재가를 못 가져온 종목이 50% 넘으면 갱신 중단(기존 데이터 유지)
