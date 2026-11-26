@@ -52,8 +52,8 @@ def main(out: str):
     shutil.copytree(ROOT / "site", out, ignore=shutil.ignore_patterns("data"))
     text = demo_csv()
     M.fetch_csv = lambda *a, **k: text
-    market.fetch_daily, market.fetch_naver_summary, market.fetch_naver_main = F.fake_daily, F.fake_summary, F.fake_main
-    consensus.fetch_fnguide = F.fake_fnguide
+    market.fetch_daily, market.fetch_naver_summary, market.fetch_per = F.fake_daily, F.fake_summary, F.fake_per
+    consensus.fetch_naver_annual = F.fake_annual
     assert M.main(["--out", str(out / "data")]) == 0
     p = out / "data" / "latest.json"
     d = json.loads(p.read_text(encoding="utf-8"))

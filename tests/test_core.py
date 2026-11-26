@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
 from collector import consensus, market, scoring, strategy
@@ -60,36 +59,30 @@ def test_ticks():
     assert round_tick(512_345, "down") == 512_000
 
 
-# ------------------------------------------------------------- 실적 표 파서
-def test_naver_annual_table():
-    cols = pd.MultiIndex.from_tuples([("주요재무정보", "주요재무정보"), ("최근 연간 실적", "2024.12"),
-                                      ("최근 연간 실적", "2025.12"), ("최근 연간 실적", "2026.12(E)"),
-                                      ("최근 분기 실적", "2026.06")])
-    df = pd.DataFrame([["매출액", "1,000", "1,200", "1,500", "400"], ["EPS(원)", "100", "120", "180", "40"],
-                       ["부채비율", "80.1", "75.0", "", "70"]], columns=cols)
-    raw = market.annual_table(df)
-    assert set(raw) == {"2024", "2025", "2026E"}
-    norm = consensus.normalize_years(raw)
-    assert norm["2026"]["estimate"] and norm["2026"]["eps"] == 180 and norm["2024"]["debt_ratio"] == 80.1
-    est = consensus.estimates_for(norm, 2026)
-    assert round(est["eps_g_cur"], 1) == 50.0 and est["eps_g_next"] is None
+# ------------------------------------------------------------- 실적 파서
+NAVER_ANNUAL = {"financeInfo": {
+    "trTitleList": [{"isConsensus": "N", "title": "2024.12.", "key": "202412"},
+                    {"isConsensus": "N", "title": "2025.12.", "key": "202512"},
+                    {"isConsensus": "Y", "title": "2026.12.", "key": "202612"}],
+    "rowList": [
+        {"title": "매출액", "columns": {"202412": {"value": "1,000"}, "202512": {"value": "1,200"}, "202612": {"value": "1,500"}}},
+        {"title": "당기순이익", "columns": {"202412": {"value": "90"}, "202512": {"value": "95"}, "202612": {"value": "130"}}},
+        {"title": "지배주주순이익", "columns": {"202412": {"value": "80"}, "202512": {"value": "90"}, "202612": {"value": "-"}}},
+        {"title": "ROE", "columns": {"202412": {"value": "9.0"}, "202512": {"value": "10.85"}, "202612": {"value": "12"}}},
+        {"title": "부채비율", "columns": {"202412": {"value": "80.1"}, "202512": {"value": "29.94"}, "202612": {"value": "-"}}},
+        {"title": "EPS", "columns": {"202412": {"value": "-50"}, "202512": {"value": "100"}, "202612": {"value": "150"}}},
+    ]}}
 
 
-def test_fnguide_highlight():
-    html = """<div id="highlight_D_Y"><table><thead><tr><th>IFRS(연결)</th><th>2024/12</th><th>2025/12</th>
-    <th>2026/12(E)</th><th>2027/12(E)</th></tr></thead><tbody>
-    <tr><th>매출액</th><td>1,000</td><td>1,100</td><td>1,300</td><td>1,500</td></tr>
-    <tr><th>영업이익</th><td>100</td><td>110</td><td>150</td><td>200</td></tr>
-    <tr><th>EPS(원)</th><td>1,000</td><td>-50</td><td>800</td><td>1,200</td></tr>
-    </tbody></table></div>"""
-    raw = consensus.parse_fnguide_highlight(html)
-    norm = consensus.normalize_years(raw)
-    est = consensus.estimates_for(norm, 2026)
-    assert est["next"]["eps"] == 1200 and est["eps_g_next"] == 50.0
-    assert est["eps_g_cur"] is None  # 적자 기준 성장률은 계산 안 함
-    merged = consensus.merge_annual(norm, {"2026": {"estimate": True, "debt_ratio": 55.0, "eps": 999}})
-    assert merged["2026"]["eps"] == 800 and merged["2026"]["debt_ratio"] == 55.0
-    assert merged["2026"]["_src"]["debt_ratio"] == "네이버"
+def test_naver_annual():
+    a = consensus.parse_naver_annual(NAVER_ANNUAL)
+    assert set(a) == {"2024", "2025", "2026"} and a["2026"]["estimate"] and not a["2025"]["estimate"]
+    assert a["2025"]["net_income"] == 90 and a["2026"]["net_income"] == 130   # 지배주주 없으면 당기순이익
+    assert a["2025"]["debt_ratio"] == 29.94 and "debt_ratio" not in a["2026"]
+    est = consensus.estimates_for(a, 2026)
+    assert est["eps_g_cur"] == 50.0 and est["eps_g_next"] is None and est["next"] == {}
+    est25 = consensus.estimates_for(a, 2025)
+    assert est25["eps_g_cur"] is None and est25["turnaround_cur"]          # 적자→흑자
 
 
 # ------------------------------------------------------------- 점수

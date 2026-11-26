@@ -61,14 +61,16 @@
     let warn = "";
     if (m.demo) warn += `<div class="banner err">⚠️ 화면 확인용 <b>데모 데이터</b>입니다. 실제 시세가 아닙니다.</div>`;
     if (!m.dart_enabled) warn += `<div class="banner">DART API 키가 설정되지 않아 확정 실적·희석 물량·대주주 지분은 N/A로 표시됩니다.</div>`;
-    $status.innerHTML = `<div class="strip">
-      <div class="tile"><div class="k">데이터 갱신</div><div class="v small" style="font-size:17px">${esc(m.generated_at)}</div>
-        <div class="s">시세 기준일 ${esc(m.price_as_of || "N/A")} · 대상 ${m.sheet?.stocks ?? "-"}종목</div></div>
-      <div class="tile"><div class="k">권장 현금 비중</div><div class="v">${isNum(c.cash_pct) ? c.cash_pct.toFixed(0) + "%" : "N/A"}</div>
-        <div class="s">주식 ${isNum(c.cash_pct) ? (100 - c.cash_pct).toFixed(0) : "-"}% · 🟢 ${c.n_green ?? 0}종목</div></div>
-      <div class="tile"><div class="k">코스피</div><div class="v">${mk ? n0(mk.last) : "N/A"}</div>
-        <div class="s ${trendCls}">${esc(c.trend_desc || "")}</div></div>
-      <div class="tile"><div class="k">등급 분포</div><div class="gcounts">
+    const cp = isNum(c.cash_pct) ? c.cash_pct : null;
+    $status.innerHTML = `<div class="hero">
+      <div><div class="k">권장 현금 비중</div><div class="v">${cp !== null ? cp.toFixed(0) + "%" : "N/A"}</div>
+        <div class="cashbar" title="주식 ${cp !== null ? 100 - cp : "-"}% / 현금 ${cp ?? "-"}%"><i style="width:${cp ?? 0}%"></i></div>
+        <div class="s">주식 ${cp !== null ? (100 - cp).toFixed(0) : "-"}% · 현금 ${cp !== null ? cp.toFixed(0) : "-"}%</div></div>
+      <div><div class="k">코스피</div><div class="v">${mk ? n0(mk.last) : "N/A"}</div>
+        <div class="s ${trendCls}">${esc((c.trend_desc || "").replace("코스피 ", ""))}</div></div>
+      <div><div class="k">데이터 갱신</div><div class="v sm">${esc(String(m.generated_at || "").replace(" KST", ""))}</div>
+        <div class="s">시세 ${esc(m.price_as_of || "N/A")} · ${m.sheet?.stocks ?? "-"}종목</div></div>
+      <div><div class="k">등급 분포</div><div class="gcounts">
         ${["green", "yellow", "white", "red"].map((g) => `<span class="g g-${g}">${gradeShort[g]} ${gc[g] ?? 0}</span>`).join("")}</div></div>
     </div>${warn}`;
   }
@@ -122,7 +124,7 @@
         <input id="q" type="search" placeholder="종목명·코드 검색" value="${esc(state.q)}">
         <select id="sector"><option value="">섹터 전체</option>${sectors.map((s) => `<option ${s === state.sector ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
         <select id="mcap">${MCAP.map(([v, l]) => `<option value="${v}" ${v === state.mcap ? "selected" : ""}>${l}</option>`).join("")}</select>
-        ${["green", "yellow", "white", "red"].map((g) => `<button class="chip ${state.grades.has(g) ? "on" : ""}" data-g="${g}">${gradeShort[g]}</button>`).join("")}
+        <div class="chips">${["green", "yellow", "white", "red"].map((g) => `<button class="chip ${state.grades.has(g) ? "on" : ""}" data-g="${g}">${gradeShort[g]}</button>`).join("")}</div>
         <span class="count" id="count"></span>
       </div>
       <div class="card"><div class="tbl-wrap"><table class="rank"><thead><tr>
@@ -157,7 +159,7 @@
   function rowHtml(s) {
     const sc = s.score;
     return `<tr data-code="${esc(s.code)}">
-      <td class="l rk ${s.rank <= 3 ? "top" : ""}">${s.rank}</td>
+      <td class="l rk ${s.rank <= 3 ? "rk1" : ""}">${s.rank}</td>
       <td class="l nm">${esc(s.name)}<small>${esc(s.code)} · ${esc(s.sector)}</small></td>
       <td class="l">${gradeBadge(s)}</td>
       <td><span class="score"><b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b>${bar(sc.total)}</span></td>
@@ -171,10 +173,11 @@
   function cardHtml(s) {
     const sc = s.score;
     return `<a class="mcard" href="#/stock/${esc(s.code)}">
-      <div class="mrow"><div><span class="rk ${s.rank <= 3 ? "top" : ""}">${s.rank}</span> <b>${esc(s.name)}</b> <span class="tiny muted">${esc(s.code)} · ${esc(s.sector)}</span></div>
-        <div><b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b><span class="tiny muted">점</span></div></div>
-      <div class="mrow" style="margin-top:6px">${gradeBadge(s)}<div>${won(s.price)} <span class="tiny">${sgn(s.change_pct, 2)}</span></div></div>
-      <div class="mstats"><span>업사이드 ${sgn(sc.upside_pct, 0)}</span><span>PER ${perf(s.per)}</span><span>PBR ${x1(s.pbr, "")}</span><span>시총 ${eok(s.mcap_eok)}</span><span>비중 ${(s.weight_pct || 0).toFixed(1)}%</span></div>
+      <div class="mrow"><div class="mname"><span class="rk ${s.rank <= 3 ? "rk1" : ""}">${s.rank}</span>
+          <div><b>${esc(s.name)}</b><span class="tiny">${esc(s.sector)} · ${esc(s.code)}</span></div></div>
+        <div class="mprice"><b>${won(s.price)}</b><span class="tiny">${sgn(s.change_pct, 2)}</span></div></div>
+      <div class="mstats">${gradeBadge(s)}<span>총점 <b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b></span>
+        <span>업사이드 ${sgn(sc.upside_pct, 0)}</span><span>PER <b>${perf(s.per)}</b></span><span>비중 <b>${(s.weight_pct || 0).toFixed(1)}%</b></span></div>
       <div class="reason">${esc(sc.reason)}</div></a>`;
   }
 
@@ -251,11 +254,11 @@
 
       <div class="card sec" style="margin-top:12px"><h2>52주 차트 <span class="muted">일봉 · 상승 빨강 / 하락 파랑</span></h2>
         <div class="chart-box" id="chart"><p class="muted small">차트 불러오는 중…</p></div>
-        <div class="legend"><span><i style="border-color:#0e9f6e;border-top-style:dashed"></i>목표가</span><span><i style="border-color:#17191c"></i>분할매수가</span>
-          <span><i style="border-color:#1b64da;border-top-style:dashed"></i>손절가</span><span><i style="border-color:#9aa1ad;border-top-style:dotted"></i>52주 고·저</span></div>
+        <div class="legend"><span><i style="border-color:#2fca73;border-top-style:dashed"></i>목표가</span><span><i style="border-color:#d1d6db"></i>분할매수가</span>
+          <span><i style="border-color:#8fb8ff;border-top-style:dashed"></i>손절가</span><span><i style="border-color:#6b7280;border-top-style:dotted"></i>52주 고·저</span></div>
       </div>
 
-      <div class="card sec" style="margin-top:12px"><h2>예상 실적 <span class="muted">단위: 억원, EPS 원 · FnGuide/네이버 컨센서스</span></h2>
+      <div class="card sec" style="margin-top:12px"><h2>예상 실적 <span class="muted">단위: 억원, EPS 원 · 네이버 증권 컨센서스(E)</span></h2>
         <div class="tbl-wrap" style="display:block"><table class="mini"><thead><tr><th></th><th>${yr - 1} ${tag(est.prev)}</th><th>${yr} ${tag(est.cur)}</th><th>성장률</th><th>${yr + 1} ${tag(est.next)}</th><th>성장률</th></tr></thead>
           <tbody>${yrow("매출액", "revenue")}${yrow("영업이익", "op_income")}${yrow("EPS", "eps", "won")}</tbody></table></div>
         ${est.turnaround_next ? '<p class="small up">내년 흑자전환 예상</p>' : ""}
@@ -318,13 +321,13 @@
     const W = Math.max(340, Math.round(box.clientWidth || 900)), H = W < 600 ? 250 : 330;
     const padL = 6, padR = 58, padT = 12, padB = 26;
     const lines = [];
-    if (isNum(s.target)) lines.push([s.target, "#0e9f6e", "6 4", "목표"]);
+    if (isNum(s.target)) lines.push([s.target, "#2fca73", "6 4", "목표"]);
     if (s.plan) {
-      s.plan.entries.forEach((e) => lines.push([e.price, "#17191c", "", `${e.step}차`]));
-      lines.push([s.plan.stop, "#1b64da", "6 4", "손절"]);
+      s.plan.entries.forEach((e) => lines.push([e.price, "#d1d6db", "", `${e.step}차`]));
+      lines.push([s.plan.stop, "#8fb8ff", "6 4", "손절"]);
     }
     const hi = Math.max(...rows.map((r) => r[2])), lo = Math.min(...rows.map((r) => r[3]));
-    lines.push([hi, "#9aa1ad", "2 3", "52주高"], [lo, "#9aa1ad", "2 3", "52주低"]);
+    lines.push([hi, "#6b7280", "2 3", "52주 고"], [lo, "#6b7280", "2 3", "52주 저"]);
     const all = [hi, lo, ...lines.map((l) => l[0]).filter(isNum)];
     let ymax = Math.max(...all), ymin = Math.min(...all);
     const pad = (ymax - ymin) * 0.05; ymax += pad; ymin -= pad;
@@ -335,18 +338,18 @@
     // 격자
     for (let k = 0; k <= 4; k++) {
       const v = ymin + ((ymax - ymin) * k) / 4, y = Y(v);
-      g += `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" stroke="#f0f1f4"/><text x="${W - padR + 6}" y="${y + 4}" font-size="11" fill="#8a909c">${Math.round(v).toLocaleString("ko-KR")}</text>`;
+      g += `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" stroke="#25252c"/><text x="${W - padR + 6}" y="${y + 4}" font-size="11" fill="#7d818b">${Math.round(v).toLocaleString("ko-KR")}</text>`;
     }
     // 월 라벨
     let lastM = "";
     rows.forEach((r, i) => {
       const m = r[0].slice(0, 7);
-      if (m !== lastM && i > 3 && (W >= 600 || +m.slice(5) % 2 === 1)) g += `<text x="${X(i)}" y="${H - 8}" font-size="11" fill="#8a909c" text-anchor="middle">${m.slice(2).replace("-", ".")}</text>`;
+      if (m !== lastM && i > 3 && (W >= 600 || +m.slice(5) % 2 === 1)) g += `<text x="${X(i)}" y="${H - 8}" font-size="11" fill="#7d818b" text-anchor="middle">${m.slice(2).replace("-", ".")}</text>`;
       lastM = m;
     });
     // 캔들
     rows.forEach((r, i) => {
-      const [, o, h, l, c] = r, up = c >= o, col = up ? "#e5322d" : "#1b64da";
+      const [, o, h, l, c] = r, up = c >= o, col = up ? "#f04452" : "#3182f6";
       const x = X(i), bw = Math.max(1, cw * 0.62);
       g += `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1"/>`;
       const y1 = Y(Math.max(o, c)), y2 = Y(Math.min(o, c));
@@ -366,8 +369,8 @@
     for (let k = 1; k < labs.length; k++) if (labs[k].y < labs[k - 1].y + 12) labs[k].y = labs[k - 1].y + 12;
     const over = labs.length ? labs[labs.length - 1].y - (H - padB - 2) : 0;
     if (over > 0) labs.forEach((l) => (l.y -= over));
-    labs.forEach((l) => { g += `<text x="${padL + 4}" y="${l.y}" font-size="10.5" fill="${l.col}" paint-order="stroke" stroke="#fff" stroke-width="3">${l.t}</text>`; });
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="52주 일봉 차트">${g}<line id="xh" y1="${padT}" y2="${H - padB}" stroke="#17191c" stroke-width=".6" opacity="0"/></svg><div class="tip" id="tip"></div>`;
+    labs.forEach((l) => { g += `<text x="${padL + 4}" y="${l.y}" font-size="10.5" fill="${l.col}" paint-order="stroke" stroke="#1c1c21" stroke-width="3">${l.t}</text>`; });
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="52주 일봉 차트">${g}<line id="xh" y1="${padT}" y2="${H - padB}" stroke="#d1d6db" stroke-width=".6" opacity="0"/></svg><div class="tip" id="tip"></div>`;
     const svg = box.querySelector("svg"), tip = box.querySelector("#tip"), xh = box.querySelector("#xh");
     const move = (ev) => {
       const pt = ev.touches ? ev.touches[0] : ev;
@@ -455,10 +458,10 @@
     document.querySelectorAll("[data-nav]").forEach((a) => a.classList.remove("on"));
     const m = h.match(/^#\/stock\/([0-9A-Z]{6})/);
     window.scrollTo(0, 0);
-    if (m) { renderStock(m[1]); return; }
-    if (h.startsWith("#/sectors")) { document.querySelector('[data-nav="sectors"]').classList.add("on"); renderSectors(); return; }
-    if (h.startsWith("#/rules")) { document.querySelector('[data-nav="rules"]').classList.add("on"); renderRules(); return; }
-    document.querySelector('[data-nav="rank"]').classList.add("on");
+    if (m) { document.querySelectorAll('[data-nav="rank"]').forEach((a) => a.classList.add("on")); renderStock(m[1]); return; }
+    if (h.startsWith("#/sectors")) { document.querySelectorAll('[data-nav="sectors"]').forEach((a) => a.classList.add("on")); renderSectors(); return; }
+    if (h.startsWith("#/rules")) { document.querySelectorAll('[data-nav="rules"]').forEach((a) => a.classList.add("on")); renderRules(); return; }
+    document.querySelectorAll('[data-nav="rank"]').forEach((a) => a.classList.add("on"));
     renderRank();
   }
 

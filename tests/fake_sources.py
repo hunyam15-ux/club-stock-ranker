@@ -41,23 +41,23 @@ def fake_summary(sess, code):
             "mcap_eok": r.choice([800, 3000, 9000, 40000, 300000]), "per": r.choice([-5, 6, 9, 14, 22, 35]),
             "pbr": r.choice([0.5, 0.9, 1.4, 2.5, 4.0]), "div_yield": r.choice([None, 0.5, 2.1, 4.0]),
             "high52": None, "low52": None, "cons_target": round(last * r.uniform(0.85, 1.6), -2),
-            "market": "코스닥" if r.random() > 0.5 else "코스피"}
+            "market": "코스닥" if r.random() > 0.5 else "코스피",
+            "peer_codes": [f"{r.randint(100000, 999999)}" for _ in range(5)]}
 
 
-def fake_main(sess, code):
-    r = _rng(code)
-    return {"industry_per": r.choice([None, 10.5, 15.2, 20.1])}
-
-
-def fake_fnguide(sess, code):
+def fake_annual(sess, code):
     r = _rng(code)
     e = r.uniform(200, 5000)
     ann = {}
-    for y in (2023, 2024, 2025, 2026, 2027):
+    for y in (2023, 2024, 2025, 2026):
         e *= 1 + r.uniform(-0.2, 0.45)
         ann[str(y)] = {"estimate": y >= 2026, "revenue": e * 300, "op_income": e * 30, "eps": e,
                        "roe": r.uniform(3, 20), "debt_ratio": r.choice([40, 90, 180, 320])}
-    return {"annual": ann}
+    return ann
+
+
+def fake_per(sess, code):
+    return _rng(code).choice([None, 8.0, 11.0, 15.0, 24.0])
 
 
 def install(monkeypatch):
@@ -67,6 +67,6 @@ def install(monkeypatch):
     monkeypatch.setattr("collector.main.fetch_csv", lambda *a, **k: csv_text)
     monkeypatch.setattr(market, "fetch_daily", fake_daily)
     monkeypatch.setattr(market, "fetch_naver_summary", fake_summary)
-    monkeypatch.setattr(market, "fetch_naver_main", fake_main)
-    monkeypatch.setattr(consensus, "fetch_fnguide", fake_fnguide)
+    monkeypatch.setattr(market, "fetch_per", fake_per)
+    monkeypatch.setattr(consensus, "fetch_naver_annual", fake_annual)
     _ = sheet

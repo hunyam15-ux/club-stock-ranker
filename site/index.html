@@ -2,7 +2,9 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101013">
+  <meta name="color-scheme" content="dark">
   <title>모임 매수 순위</title>
   <meta name="description" content="투자모임 발표 종목의 매수 순위와 매매 전략 (투자 참고용)">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -21,12 +23,17 @@
       </nav>
     </div>
   </header>
+  <nav class="tabbar">
+    <a href="#/" data-nav="rank"><span class="ic">📈</span>순위</a>
+    <a href="#/sectors" data-nav="sectors"><span class="ic">🗂️</span>섹터</a>
+    <a href="#/rules" data-nav="rules"><span class="ic">📋</span>매매 원칙</a>
+  </nav>
   <div id="status" class="wrap"></div>
   <main id="app" class="wrap"><p class="loading">데이터를 불러오는 중…</p></main>
   <footer class="foot">
     <div class="wrap">
       <p class="disclaimer">⚠️ 본 사이트의 모든 내용은 <b>투자 참고용이며 투자 권유가 아닙니다.</b> 투자 판단과 그 결과에 대한 책임은 투자자 본인에게 있습니다.</p>
-      <p class="src" id="foot-src">데이터: 모임 구글 시트 · 네이버 금융 · FnGuide · DART OpenAPI · pykrx(보조)</p>
+      <p class="src" id="foot-src">데이터: 모임 구글 시트 · 네이버 증권 · DART OpenAPI · pykrx(보조)</p>
     </div>
   </footer>
   <script src="app.js"></script>

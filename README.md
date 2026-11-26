@@ -10,7 +10,7 @@
 collector/      Python 데이터 수집·점수 계산
   sheet.py        모임 시트 CSV 읽기(메인 표만, 6자리 국내 코드만)
   market.py       네이버 금융 시세·지표·일봉 (pykrx 보조)
-  consensus.py    FnGuide 실적·추정치 (네이버 보조)
+  consensus.py    네이버 증권 연간 재무·컨센서스(E)
   dart.py         DART: 확정 실적·부채비율·CB/BW/유상증자·최대주주
   scoring.py      점수·등급·한 줄 근거
   strategy.py     분할매수·손절·익절·비중·현금 비중
@@ -86,12 +86,12 @@ python -m tests.make_demo /tmp/demo && cd /tmp/demo && python -m http.server 800
 |---|---|---|
 | 현재가·등락률 | 네이버 금융 | 일봉 종가 → 시트 현재가 |
 | 시총·PER·PBR·배당·52주 고저 | 네이버 금융 | pykrx → 시트 |
-| 컨센서스 목표가 | 네이버(FnGuide 컨센서스) | FnGuide |
-| 올해·내년 매출·영업이익·EPS(E) | FnGuide Financial Highlight | 네이버 기업실적분석 |
-| 확정 실적·부채비율 | DART 단일회사 주요계정 | FnGuide/네이버 연간 |
+| 컨센서스 목표가 | 네이버 증권 컨센서스 | — |
+| 매출·영업이익·EPS·ROE·부채비율(확정 3년 + 컨센서스 E) | 네이버 증권 재무 API (`/api/stock/{code}/finance/annual`) | — |
+| 확정 실적·부채비율 | DART 단일회사 주요계정 | 네이버 연간 재무 |
 | CB·BW·유상증자 | DART 주요사항보고 | — |
 | 최대주주 지분 | DART 최대주주 현황 | — |
-| 섹터 PER 기준 | 네이버 동일업종 PER | 모임 섹터 중앙값 → 전체 중앙값 |
+| 섹터 PER 기준 | 네이버 동종업종 비교 종목들의 PER 중앙값 | 모임 섹터 중앙값 → 전체 중앙값 |
 | 코스피 추세 | 네이버 지수 일봉 | — |
 
 알아둘 점
@@ -102,7 +102,9 @@ python -m tests.make_demo /tmp/demo && cd /tmp/demo && python -m http.server 800
 - 시트의 두 번째 표(발표자/종목명/종목코드 형식)와 해외 종목, 티커가 없는 섹터 행은 제외합니다.
   같은 종목을 여러 번 발표했다면 하나로 합치고, 목표가는 **가장 최근 발표의 목표가**를 씁니다. 메모는 날짜별로 이어 붙입니다.
 - ETF(예: SOL 반도체전공정)는 PER·컨센서스가 없어 대부분 N/A → 보통 ⚪(데이터 부족)로 나옵니다.
-- 네이버·FnGuide 화면 구조가 바뀌면 해당 항목만 N/A가 됩니다. Actions 로그의 `WARNING` 줄과
+- 내년(E) 추정치: 네이버는 보통 컨센서스 1개 연도(올해 E)만 줍니다. 내년 E가 없으면 N/A로 두고, 실적 모멘텀은 올해 E EPS 성장률로 계산합니다(화면에 기준 연도 표시).
+  FnGuide 종목 페이지는 GitHub Actions 서버에서 "페이지 없음"을 돌려줘 사용하지 않습니다.
+- 네이버 API 구조가 바뀌면 해당 항목만 N/A가 됩니다. Actions 로그의 `WARNING` 줄과
   상세 화면 하단의 '수집 실패 항목'을 보고 `market.py`/`consensus.py`의 파서를 고치면 됩니다.
 
 ## 4. 점수 가중치·규칙 수정 방법

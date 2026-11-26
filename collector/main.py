@@ -106,17 +106,11 @@ def collect_one(sess, st, dart: Dart, today: datetime, cfg_set: dict, cfg_sc: di
                 errors.append(f"pykrx 일봉: {e2}")
     deriv = market.derive_from_daily(daily) if daily else {}
 
-    nmain = {}
+    annual = {}
     try:
-        nmain = market.fetch_naver_main(sess, code)
+        annual = consensus.fetch_naver_annual(sess, code)
     except Exception as e:  # noqa: BLE001
-        errors.append(f"네이버 종목메인: {e}")
-
-    fg = {}
-    try:
-        fg = consensus.fetch_fnguide(sess, code)
-    except Exception as e:  # noqa: BLE001
-        errors.append(f"FnGuide: {e}")
+        errors.append(f"네이버 재무·컨센서스: {e}")
 
     pk = {}
     if (nv.get("per") is None or nv.get("pbr") is None) and cfg_set["collect"].get("use_pykrx_fallback"):
@@ -139,9 +133,7 @@ def collect_one(sess, st, dart: Dart, today: datetime, cfg_set: dict, cfg_sc: di
     rec["market"] = nv.get("market") or st.market_hint
     rec["is_etf"] = (nv.get("stock_type") or "").lower() == "etf" or "ETF" in (st.name or "").upper()
 
-    # ---- 실적(연간) 병합: FnGuide 우선, 네이버 보조
-    naver_annual = consensus.normalize_years(nmain["annual"]) if nmain.get("annual") else None
-    annual = consensus.merge_annual(fg.get("annual"), naver_annual)
+    # ---- 실적(연간): 네이버 재무 + 컨센서스
     est = consensus.estimates_for(annual, today.year)
     rec["annual"] = {y: annual[y] for y in sorted(annual)[-6:]}
     rec["est"] = est
@@ -166,7 +158,8 @@ def collect_one(sess, st, dart: Dart, today: datetime, cfg_set: dict, cfg_sc: di
     rec.update(per=per, pbr=pbr, fwd_per=fwd_per, fwd_basis=fwd_basis, roe=roe,
                div_yield=first(nv.get("div_yield"), pk.get("div_yield")),
                mcap_eok=first(nv.get("mcap_eok"), st.sheet_mcap),
-               industry_per=nmain.get("industry_per"))
+               industry_per=None)
+    rec["peer_codes"] = nv.get("peer_codes") or []
     rec["sources"]["mcap"] = "네이버" if nv.get("mcap_eok") else ("시트" if st.sheet_mcap else None)
 
     # ---- 52주
@@ -179,9 +172,9 @@ def collect_one(sess, st, dart: Dart, today: datetime, cfg_set: dict, cfg_sc: di
 
     # ---- 목표가
     ct, cpitch = club_target(st)
-    cons_t = first(nv.get("cons_target"), fg.get("target"))
+    cons_t = nv.get("cons_target")
     rec["target_club"], rec["target_cons"] = ct, cons_t
-    rec["sources"]["target_cons"] = "네이버(FnGuide 컨센서스)" if nv.get("cons_target") else ("FnGuide" if fg.get("target") else None)
+    rec["sources"]["target_cons"] = "네이버 컨센서스" if cons_t else None
     rec["cons_date"] = nv.get("cons_date")
     tgt, tsrc = scoring.pick_target(ct, cons_t, cfg_sc["upside"]["target_source"])
     rec["target"], rec["target_source"] = tgt, tsrc
@@ -200,7 +193,7 @@ def collect_one(sess, st, dart: Dart, today: datetime, cfg_set: dict, cfg_sc: di
     # ---- DART
     rec["dart"] = {"enabled": dart.enabled}
     debt = first(est["prev"].get("debt_ratio"), est["cur"].get("debt_ratio"))
-    debt_basis = "FnGuide/네이버 연간" if debt is not None else None
+    debt_basis = "네이버 연간 재무" if debt is not None else None
     if dart.enabled:
         try:
             corp = dart.corp_code(code)
@@ -270,6 +263,25 @@ def main(argv=None) -> int:
         log.info("[%d/%d] %s %s", i, len(stocks), st.code, st.name)
         recs.append(collect_one(sess, st, dart, today, cfg_set, cfg_sc))
 
+    # 동일업종 PER: 네이버 '동종업종 비교' 종목들의 PER 중앙값(자기 자신 제외)
+    per_cache = {r["code"]: r.get("per") for r in recs}
+    for r in recs:
+        pers = []
+        for pc in r.get("peer_codes", [])[:8]:
+            if pc == r["code"]:
+                continue
+            if pc not in per_cache:
+                try:
+                    per_cache[pc] = market.fetch_per(sess, pc)
+                except Exception:  # noqa: BLE001
+                    per_cache[pc] = None
+            v = per_cache[pc]
+            if v is not None and 0 < v < 300:
+                pers.append(v)
+        if len(pers) >= 2:
+            r["industry_per"] = median(pers)
+            r["industry_per_n"] = len(pers)
+
     have_price = sum(1 for r in recs if r["price"] and r["sources"]["price"] != "시트(구글파이낸스)")
     if have_price / len(recs) < cfg_set["collect"]["min_price_coverage"]:
         log.error("실시간 현재가 수집률 %.0f%% → 비정상으로 보고 갱신 중단(기존 데이터 유지)", have_price / len(recs) * 100)
@@ -287,7 +299,7 @@ def main(argv=None) -> int:
     for r in recs:
         ss = secstats[r["sector"]]
         if vcfg["sector_benchmark"] == "naver_industry_first" and r.get("industry_per"):
-            bper, bper_src = r["industry_per"], "네이버 동일업종 PER"
+            bper, bper_src = r["industry_per"], f"네이버 동종업종 {r.get('industry_per_n')}종목 PER 중앙값"
         elif ss["n_per"] >= vcfg["sector_min_members"]:
             bper, bper_src = ss["per_median"], f"모임 '{r['sector']}' 섹터 중앙값({ss['n_per']}종목)"
         else:
@@ -301,7 +313,9 @@ def main(argv=None) -> int:
         s = {
             "price": r["price"], "target": r["target"], "target_source": r["target_source"],
             "per": r["per"], "pbr": r["pbr"], "fwd_per": r["fwd_per"], "bench_per": bper, "bench_pbr": bpbr,
-            "eps_growth_next": est.get("eps_g_next"), "turnaround": est.get("turnaround_next"),
+            "eps_growth_next": first(est.get("eps_g_next"), est.get("eps_g_cur")),
+            "eps_growth_label": f"{today.year + 1}E EPS" if est.get("eps_g_next") is not None else f"{today.year}E EPS",
+            "turnaround": est.get("turnaround_next") or (est.get("eps_g_next") is None and est.get("turnaround_cur")),
             "revision_pct": rev, "range_pos": r["range_pos"], "ret_1m": r["ret_1m"], "ret_3m": r["ret_3m"],
             "dilution_pct": ((r["dart"].get("dilution") or {}).get("potential_pct") if r["dart"].get("dilution") else None),
             "debt_ratio": r["debt_ratio"],

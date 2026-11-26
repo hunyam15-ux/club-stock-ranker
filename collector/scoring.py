@@ -181,9 +181,9 @@ def reason_line(s: dict, r: dict) -> str:
             (pos if d > 0 else neg).append((abs(d) * 0.6, f"PBR 섹터 대비 {abs(d):.0f}% {'할인' if d > 0 else '할증'}"))
     g = c["momentum"].get("eps_growth")
     if s.get("turnaround"):
-        pos.append((40, "내년 흑자전환 예상"))
+        pos.append((40, "흑자전환 예상"))
     elif g is not None:
-        (pos if g >= 10 else neg if g < 0 else []).append((abs(g), f"내년 EPS {_f(g)}"))
+        (pos if g >= 10 else neg if g < 0 else []).append((abs(g), f"{s.get('eps_growth_label') or '예상 EPS'} {_f(g)}"))
     rev = c["momentum"].get("revision")
     if rev is not None and abs(rev) >= 3:
         (pos if rev > 0 else neg).append((abs(rev) * 3, f"컨센서스 {'상향' if rev > 0 else '하향'} {_f(rev, 1)}"))

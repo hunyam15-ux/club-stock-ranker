@@ -13,7 +13,6 @@ from .util import get, log, parse_korean_amount, to_num
 NAVER_BASIC = "https://m.stock.naver.com/api/stock/{code}/basic"
 NAVER_INTEGRATION = "https://m.stock.naver.com/api/stock/{code}/integration"
 NAVER_FCHART = "https://fchart.stock.naver.com/sise.nhn"
-NAVER_MAIN = "https://finance.naver.com/item/main.naver"
 
 
 # ---------------------------------------------------------------- 일봉
@@ -116,56 +115,10 @@ def fetch_naver_summary(sess, code: str) -> dict:
     return out
 
 
-def fetch_naver_main(sess, code: str) -> dict:
-    """finance.naver.com 종목 메인: 동일업종 PER, 기업실적분석 표(연간)."""
-    import pandas as pd
-
-    out: dict = {}
-    r = get(sess, NAVER_MAIN, params={"code": code})
-    html = r.content.decode(r.apparent_encoding or "euc-kr", errors="replace")
-
-    i = html.find("동일업종 PER")
-    if i >= 0:
-        m = re.search(r"<em[^>]*>\s*([-\d.,]+)\s*</em>", html[i:i + 1500])
-        if m:
-            out["industry_per"] = to_num(m.group(1))
-    try:
-        from io import StringIO
-        tables = pd.read_html(StringIO(html), match="매출액")
-    except Exception:  # noqa: BLE001
-        tables = []
-    for t in tables:
-        annual = annual_table(t)
-        if annual:
-            out["annual"] = annual
-            break
-    return out
-
-
-def annual_table(df) -> dict | None:
-    """네이버 '기업실적분석' 표 → {'2025': {'매출액':..,'EPS(원)':..}, '2026E': {...}} (억원/원/%/배)."""
-    cols = list(df.columns)
-    if not cols:
-        return None
-    # 멀티인덱스: ('최근 연간 실적', '2025.12') / ('최근 연간 실적', '2026.12(E)')
-    label_col = cols[0]
-    out: dict[str, dict] = {}
-    for c in cols[1:]:
-        parts = c if isinstance(c, tuple) else (str(c),)
-        if not any("연간" in str(p) for p in parts):
-            continue
-        txt = " ".join(str(p) for p in parts)
-        m = re.search(r"(20\d\d)[./]\d\d", txt)
-        if not m:
-            continue
-        key = m.group(1) + ("E" if "(E)" in txt or "E)" in txt else "")
-        vals = {}
-        for _, row in df.iterrows():
-            label = row[label_col]
-            label = str(label[0] if isinstance(label, tuple) else label).strip()
-            vals[label] = to_num(row[c])
-        out[key] = vals
-    return out or None
+def fetch_per(sess, code: str) -> float | None:
+    """동종업종 비교용: 종목 PER 하나만."""
+    js = get(sess, NAVER_INTEGRATION.format(code=code)).json()
+    return to_num(_pick(_total_infos(js), "PER"))
 
 
 def fetch_pykrx_fundamental(code: str) -> dict:
