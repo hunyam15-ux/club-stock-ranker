@@ -434,11 +434,18 @@ def main(argv=None) -> int:
         r["rank"] = i
 
     idx = None
-    try:
-        idx_daily = market.fetch_daily(sess, cfg_sc["cash"]["index_symbol"], 300)
-        idx = market.index_trend(idx_daily, cfg_sc["cash"]["ma_short"], cfg_sc["cash"]["ma_long"])
-    except Exception as e:  # noqa: BLE001
-        log.warning("코스피 지수 수집 실패: %s", e)
+    index_series = {}
+    for sym in ("KOSPI", "KOSDAQ"):
+        try:
+            dd = market.fetch_daily(sess, sym, 300)
+            closes = [r[4] for r in dd]
+            ma = lambda n, i: (sum(closes[i - n + 1:i + 1]) / n) if i >= n - 1 else None  # noqa: E731
+            index_series[sym] = {"rows": [[r[0], r[4], ma(60, i), ma(120, i)] for i, r in enumerate(dd)][-250:],
+                                 "change_pct": (closes[-1] / closes[-2] - 1) * 100 if len(closes) > 1 else None}
+            if sym == cfg_sc["cash"]["index_symbol"]:
+                idx = market.index_trend(dd, cfg_sc["cash"]["ma_short"], cfg_sc["cash"]["ma_long"])
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s 지수 수집 실패: %s", sym, e)
     mac = macro.fetch_macro(sess)
     mac_adj = macro.macro_adjust(mac, cfg_sc["cash"]["macro"])
     n_green = sum(1 for r in recs if r["score"]["grade"] == "green")
@@ -467,6 +474,7 @@ def main(argv=None) -> int:
         daily = r.pop("_daily", None)
         r.pop("_deriv", None)
         r["has_chart"] = bool(daily)
+        r["_spark"] = [round(x[4]) for x in daily[-120::3]] if daily else None
         detail = {**r, "chart": daily[-chart_days:] if daily else None}
         (sdir / f"{r['code']}.json").write_text(json.dumps(clean(detail), ensure_ascii=False, allow_nan=False),
                                                 encoding="utf-8")
@@ -491,7 +499,10 @@ def main(argv=None) -> int:
                       "orders_pct": (r.get("orders") or {}).get("sum_pct_of_sales"), "revision": r.get("revision_pct"),
                       "quality_ok": not sc.get("quality_fails"), "knife": sc.get("falling_knife"),
                       "low_vol": (r.get("vol_annual") or 99) <= 30},
-            "ret_3m": r["ret_3m"], "range_pos": r["range_pos"],
+            "ret_1w": r.get("ret_1w"), "ret_1m": r.get("ret_1m"), "ret_3m": r["ret_3m"], "ret_6m": r.get("ret_6m"),
+            "ret_12m": r.get("ret_12m"), "range_pos": r["range_pos"], "vol_annual": r.get("vol_annual"),
+            "spark": r.get("_spark"),
+            "comps": {k: (None if v["score"] is None else round(v["score"])) for k, v in sc["components"].items()},
             "plan": ({"entry1": ent[0]["price"] if ent else None, "entry3": ent[-1]["price"] if ent else None,
                       "stop": pl.get("stop"), "tp1": pl.get("tp1"), "tp2": pl.get("tp2")} if pl else None),
             "score": {k: sc[k] for k in ("total", "grade", "grade_emoji", "grade_label", "reason", "upside_pct",
@@ -504,7 +515,7 @@ def main(argv=None) -> int:
         "price_as_of": price_dates[-1] if price_dates else None,
         "universe": {"listed": len(listing), "analyzed": len(recs), "excluded": excluded, "filters": ucfg},
         "sheet": {"rows": sheet_stats["rows"], "club_stocks": len(club), "excluded": sheet_stats["foreign_or_no_ticker"]},
-        "dart_enabled": dart.enabled, "market": idx, "cash": cash, "macro": mac,
+        "dart_enabled": dart.enabled, "market": idx, "cash": cash, "macro": mac, "index_series": index_series,
         "portfolio": port,
         "grade_counts": {g: sum(1 for r in recs if r["score"]["grade"] == g) for g in scoring.GRADES},
         "revision_snapshot_age_days": snap["_age"] if snap else None,
