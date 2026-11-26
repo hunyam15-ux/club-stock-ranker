@@ -539,6 +539,17 @@ def main(argv=None) -> int:
     payload = {"meta": meta, "sectors": sec_out, "stocks": [brief(r) for r in recs]}
     (out_dir / "latest.json").write_text(json.dumps(clean(payload), ensure_ascii=False, allow_nan=False),
                                          encoding="utf-8")
+    # 오늘의 포트폴리오 요약(작은 파일, 저장소에 커밋 → 스프레드시트 등 외부에서 바로 읽기)
+    picks = [r for r in recs if r["weight_pct"] > 0]
+    pf = {"generated_at": meta["generated_at"], "cash_pct": cash["cash_pct"], "cash_steps": cash.get("steps"),
+          "allocation": port["allocation"], "sectors": port["sectors"], "log": port["log"], "rules": port["rules"],
+          "stocks": [{"code": r["code"], "name": r["name"], "sector": r["sector"], "bucket": r["bucket"],
+                      "weight_pct": r["weight_pct"], "weight_why": r.get("weight_why"), "price": r["price"],
+                      "target": r["target"], "target_source": r["target_source"], "total": r["score"]["total"],
+                      "grade": r["score"]["grade"], "reason": r["score"]["reason"], "is_holdco": r.get("is_holdco"),
+                      "plan": r.get("plan")} for r in sorted(picks, key=lambda x: -x["weight_pct"])]}
+    (out_dir / "portfolio.json").write_text(json.dumps(clean(pf), ensure_ascii=False, indent=1, allow_nan=False),
+                                            encoding="utf-8")
     old_prices = out_dir / "prices"  # 이전 버전 차트 폴더 정리
     if old_prices.exists():
         for p in old_prices.glob("*.json"):
