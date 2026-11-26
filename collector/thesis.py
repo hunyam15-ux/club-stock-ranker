@@ -94,6 +94,8 @@ def build(r: dict) -> dict:
     # ---------- Risk
     if per is not None and per <= 0:
         risks.append((35, "최근 4분기 적자(PER 산출 불가)"))
+    if up is not None and up >= 100 and r.get("target_source") == "컨센서스":
+        risks.append((30, f"컨센서스 목표가가 현재가의 {1 + up / 100:.1f}배 — 최근 급락을 목표가가 아직 반영 못 했을 수 있음"))
     if up is not None and up < 0:
         risks.append((60, f"현재가가 목표가({_w(r['target'])})를 {(-up):.0f}% 웃돎"))
     if r.get("target_source") == "모델 적정가":

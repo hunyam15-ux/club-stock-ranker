@@ -137,3 +137,10 @@ def test_weights_cap_and_cash():
     assert abs(sum(s["weight_pct"] for s in stocks) - 45) < 0.5   # 3종목 × 상한 15%
     c = strategy.cash_policy({"last": 100, "ma_short": 90, "ma_long": 95}, 0, CFG)
     assert c["cash_pct"] == 35 and c["trend_state"] == "above_both"
+
+
+def test_grade_caps():
+    from collector.main import apply_grade_caps
+    recs = [{"score": {"grade": "green", "total": 90 - i, "flags": []}} for i in range(5)]
+    apply_grade_caps(recs, {"max_green": 2, "max_yellow": 2})
+    assert [r["score"]["grade"] for r in recs] == ["green", "green", "yellow", "yellow", "white"]

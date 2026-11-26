@@ -222,6 +222,23 @@ def score_input(r: dict) -> dict:
     }
 
 
+def apply_grade_caps(recs: list[dict], gcfg: dict) -> None:
+    """🟢·🟡 정원: 점수순으로 상위만 유지하고 넘치는 종목은 한 단계 내린다."""
+    caps = {"green": gcfg.get("max_green"), "yellow": gcfg.get("max_yellow")}
+    lower = {"green": "yellow", "yellow": "white"}
+    for g in ("green", "yellow"):
+        cap = caps[g]
+        if not cap:
+            continue
+        L = sorted([r for r in recs if r["score"]["grade"] == g], key=lambda r: -(r["score"]["total"] or 0))
+        for r in L[cap:]:
+            sc = r["score"]
+            sc["grade"] = lower[g]
+            sc["grade_emoji"] = scoring.GRADES[lower[g]]["emoji"]
+            sc["grade_label"] = scoring.GRADES[lower[g]]["label"]
+            sc["flags"] = list(sc.get("flags") or []) + [f"{scoring.GRADES[g]['emoji']} 정원({cap}) 초과"]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="테스트용: 유니버스 앞 N종목만(+모임 종목)")
@@ -375,6 +392,7 @@ def main(argv=None) -> int:
         log.info("DART 반영: %d종목", len(sel))
 
     # 6) 순위·현금·비중·전략·투자논리 ----------------------------------------
+    apply_grade_caps(recs, cfg_sc["grades"])
     g_order = {"green": 0, "yellow": 1, "white": 2, "red": 3}
     recs.sort(key=lambda r: (g_order[r["score"]["grade"]], -(r["score"]["total"] if r["score"]["total"] is not None else -1)))
     for i, r in enumerate(recs, 1):
