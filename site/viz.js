@@ -121,6 +121,69 @@
     return `<svg class="pie" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${out}${opts.center || ""}</svg>`;
   }
 
+
+  // ------------------------------------------------------------ 링 차트 (토스 스타일 도넛)
+  // parts: [{key,label,value,color,tip,href}] · opts: {size, thick, center:{value,label}, bracket:{keys,label,color}}
+  // 호버 시 해당 조각이 두꺼워지고 나머지는 흐려지며, 가운데 숫자가 그 조각으로 바뀐다(bindRing).
+  function ring(parts, opts = {}) {
+    const size = opts.size || 208, thick = opts.thick || 20, pad = opts.bracket ? 16 : 6;
+    const cx = size / 2, cy = size / 2, r = size / 2 - pad - thick / 2;
+    const ps = parts.filter((p) => p.value > 0.05);
+    const tot = ps.reduce((a, p) => a + p.value, 0) || 1;
+    const gap = ps.length > 1 ? Math.min(0.045, 0.6 / ps.length) : 0;
+    const P = (a, rr) => [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
+    const arc = (a0, a1, rr) => {
+      if (a1 - a0 >= 2 * Math.PI - 1e-4) return `M${cx - rr},${cy}A${rr},${rr} 0 1 1 ${cx + rr},${cy}A${rr},${rr} 0 1 1 ${cx - rr},${cy}`;
+      const [x0, y0] = P(a0, rr), [x1, y1] = P(a1, rr);
+      return `M${x0.toFixed(2)},${y0.toFixed(2)}A${rr},${rr} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
+    };
+    let a = -Math.PI / 2, segs = "";
+    const spans = {};
+    ps.forEach((p) => {
+      const sw = (p.value / tot) * 2 * Math.PI, a0 = a + gap / 2, a1 = a + Math.max(sw - gap / 2, gap / 2 + 0.002);
+      spans[p.key] = [a, a + sw];
+      segs += `<path class="rseg" data-k="${p.key}" d="${arc(a0, a1, r)}" stroke="${p.color}" stroke-width="${thick}" fill="none"
+        data-v="${p.value.toFixed(1)}" data-l="${(p.label || "").replace(/"/g, "&quot;")}" ${p.tip ? `data-tip="${p.tip}"` : ""} ${p.href ? `data-href="${p.href}"` : ""}/>`;
+      a += sw;
+    });
+    let br = "";
+    if (opts.bracket) {
+      const ks = opts.bracket.keys.filter((k) => spans[k]);
+      if (ks.length) {
+        const b0 = Math.min(...ks.map((k) => spans[k][0])), b1 = Math.max(...ks.map((k) => spans[k][1]));
+        const rb = r + thick / 2 + 8, col = opts.bracket.color || "#3182f6";
+        const [t0x, t0y] = P(b0 + 0.01, rb - 4), [t0X, t0Y] = P(b0 + 0.01, rb + 1), [t1x, t1y] = P(b1 - 0.01, rb - 4), [t1X, t1Y] = P(b1 - 0.01, rb + 1);
+        br = `<path d="${arc(b0 + 0.01, b1 - 0.01, rb)}" stroke="${col}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".9"/>
+          <path d="M${t0x},${t0y}L${t0X},${t0Y}M${t1x},${t1y}L${t1X},${t1Y}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`;
+      }
+    }
+    const c = opts.center || {};
+    return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" data-cv="${c.value || ""}" data-cl="${c.label || ""}">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="${thick}"/>${segs}${br}
+      <text class="rcv" x="${cx}" y="${cy + 2}" text-anchor="middle" font-size="${size < 180 ? 22 : 27}" font-weight="800" fill="#f2f3f5" letter-spacing="-.5">${c.value || ""}</text>
+      <text class="rcl" x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="12" fill="#8b8f98">${c.label || ""}</text></svg>`;
+  }
+  /** root 안의 링과 data-k 범례를 서로 연결: 호버하면 강조 + 가운데 숫자 교체, 클릭하면 data-href 로 이동 */
+  function bindRing(root) {
+    root.querySelectorAll("svg.ring").forEach((svg) => {
+      const box = svg.closest("[data-ring]") || root;
+      const cv = svg.querySelector(".rcv"), cl = svg.querySelector(".rcl");
+      const on = (k) => {
+        svg.classList.toggle("hl", !!k);
+        svg.querySelectorAll(".rseg").forEach((p) => p.classList.toggle("on", p.dataset.k === k));
+        box.querySelectorAll("[data-k]").forEach((x) => { if (!x.matches(".rseg")) x.classList.toggle("on", x.dataset.k === k); });
+        const seg = k && svg.querySelector(`.rseg[data-k="${CSS.escape(k)}"]`);
+        if (seg) { cv.textContent = seg.dataset.v + "%"; cl.textContent = seg.dataset.l; }
+        else { cv.textContent = svg.dataset.cv; cl.textContent = svg.dataset.cl; }
+      };
+      box.querySelectorAll("[data-k]").forEach((el) => {
+        el.addEventListener("mouseenter", () => on(el.dataset.k));
+        el.addEventListener("mouseleave", () => on(null));
+        if (el.dataset.href) el.addEventListener("click", () => { location.hash = el.dataset.href; });
+      });
+    });
+  }
+
   // ------------------------------------------------------------ 범위 막대 (1년 저점~고점 중 현재 위치)
   function rangeBar(lo, hi, v, opts = {}) {
     if (![lo, hi, v].every(isNum) || hi <= lo) return `<div class="rbar na"></div>`;
@@ -243,5 +306,5 @@
     requestAnimationFrame(step);
   }
 
-  window.Viz = { pie, changeColor, scoreColor, sparkline, indexChart, donut, rangeBar, radar, gauge, squarify, Tip, countUp, UP, DOWN, FLAT };
+  window.Viz = { pie, ring, bindRing, changeColor, scoreColor, sparkline, indexChart, donut, rangeBar, radar, gauge, squarify, Tip, countUp, UP, DOWN, FLAT };
 })();

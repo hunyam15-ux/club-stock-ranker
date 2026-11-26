@@ -156,9 +156,9 @@ def test_entry_and_exit_plan():
 
 
 def test_weights_core_satellite_and_cash():
-    def mk(code, mcap, grade="green", total=75):
-        return {"code": code, "mcap_eok": mcap, "vol_annual": 30, "mos_pct": 20,
-                "score": {"grade": grade, "total": total, "quality_fails": []}}
+    def mk(code, mcap, grade="green", total=75, sector=None, name=None):
+        return {"code": code, "name": name or code, "mcap_eok": mcap, "vol_annual": 30, "mos_pct": 20,
+                "sector": sector or "업종" + code, "score": {"grade": grade, "total": total, "quality_fails": []}}
     stocks = [mk("a", 90000), mk("b", 50000), mk("c", 40000), mk("d", 30000), mk("e", 25000),
               mk("s1", 3000), mk("s2", 2000), mk("s3", 1500), mk("x", 50000, "red", 20)]
     port = strategy.portfolio_weights(stocks, 40, CFG)
@@ -172,5 +172,17 @@ def test_weights_core_satellite_and_cash():
     stocks2 = [mk("a", 90000), mk("s1", 3000, "green", 88)]
     port2 = strategy.portfolio_weights(stocks2, 40, CFG)
     assert port2["satellite_boost"] and stocks2[1]["weight_pct"] > 8
+    # 분산: 같은 그룹 1종목, 섹터 2종목까지
+    st3 = [mk("h", 90000, total=90, sector="조선", name="HD현대"), mk("h2", 50000, total=89, sector="기계", name="HD건설기계"),
+           mk("m1", 80000, total=88, sector="반도체"), mk("m2", 70000, total=87, sector="반도체"),
+           mk("m3", 60000, total=86, sector="반도체"), mk("k", 40000, total=80, sector="은행")]
+    for x in st3:
+        x["group"] = __import__("collector.groups", fromlist=["group_of"]).group_of(x["name"])
+    p3 = strategy.portfolio_weights(st3, 40, CFG)
+    assert p3["core"] == ["h", "m1", "m2", "k"]
+    why = {e["code"]: e for e in p3["log"]}
+    assert "그룹" in why["h2"]["why"] and "섹터" in why["m3"]["why"]
+    semi = sum(x["weight_pct"] for x in st3 if x["sector"] == "반도체")
+    assert semi <= 60 * 0.4 + 0.2
     c = strategy.cash_policy({"last": 100, "ma_short": 90, "ma_long": 95, "ret_12m": -5}, 0, CFG, (10, ["하이일드 스프레드 5.00% ≥ 4.5% (+10%p)"]))
     assert c["cash_pct"] == 30 - 10 + 10 + 10 + 10

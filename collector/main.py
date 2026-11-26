@@ -21,6 +21,7 @@ import yaml
 
 from . import consensus, macro, market, scoring, strategy, thesis, universe
 from .dart import Dart
+from .groups import group_of, is_holdco
 from .sheet import club_target, fetch_csv, parse_sheet
 from .util import first, log, median, now_kst, pct, session
 
@@ -248,7 +249,7 @@ def score_input(r: dict) -> dict:
         "orders_pct": (r.get("orders") or {}).get("sum_pct_of_sales"), "orders_count": (r.get("orders") or {}).get("count"),
         "revision_pct": r.get("revision_pct"), "range_pos": r["range_pos"],
         "ret_1m": r["ret_1m"], "ret_3m": r["ret_3m"], "vol_annual": r.get("vol_annual"),
-        "below_ma200": r.get("below_ma200"),
+        "below_ma200": r.get("below_ma200"), "is_holdco": r.get("is_holdco"),
         "dilution_pct": r.get("dilution_pct"),
         "debt_ratio": None if r["is_financial"] else r["debt_ratio"],
         "memo_text": ((r.get("sheet") or {}).get("risk") or "") + "\n" + ((r.get("sheet") or {}).get("note") or ""),
@@ -345,6 +346,8 @@ def main(argv=None) -> int:
     for r in recs:
         r["sector"] = industry.get(r["code"]) or (club[r["code"]].sector if r["code"] in club else None) or "미분류"
         r["is_financial"] = r["sector"] in FINANCIAL_SECTORS
+        r["is_holdco"] = is_holdco(r)
+        r["group"] = group_of(r["name"])
 
     # 4) 벤치마크·목표가·점수 ----------------------------------------------
     min_n = cfg_sc["valuation"]["sector_min_members"]
@@ -359,17 +362,26 @@ def main(argv=None) -> int:
         for r in rs:
             r["score"] = scoring.score_stock(score_input(r), cfg_sc)
 
+    # 지주사는 자회사 업종 PER을 그대로 쓰면 내재가치가 부풀려진다(이익 이중 반영·지주 할인 무시) → 지주사끼리 비교
+    hold = [r for r in recs if r["is_holdco"]]
+    h_per = median([r["per"] for r in hold if r.get("per") and 0 < r["per"] < 200])
+    h_pbr = median([r["pbr"] for r in hold if r.get("pbr") and 0 < r["pbr"] < 30])
+    log.info("지주사 %d종목 · PER 중앙 %s · PBR 중앙 %s", len(hold), h_per, h_pbr)
     for r in recs:
         ss = secstats[r["sector"]]
-        if ss["n_per"] >= min_n:
+        if r["is_holdco"] and len(hold) >= min_n and h_per and h_pbr:
+            r["bench"] = {"per": h_per, "per_src": f"지주사 중앙값({len(hold)}종목)", "pbr": h_pbr,
+                          "pbr_src": f"지주사 중앙값({len(hold)}종목)", "holdco": True}
+        elif ss["n_per"] >= min_n:
             bper, bper_src = ss["per_median"], f"{r['sector']} 업종 중앙값({ss['n_per']}종목)"
         else:
             bper, bper_src = all_per, "전체 종목 중앙값"
-        if ss["n_pbr"] >= min_n:
-            bpbr, bpbr_src = ss["pbr_median"], f"{r['sector']} 업종 중앙값({ss['n_pbr']}종목)"
-        else:
-            bpbr, bpbr_src = all_pbr, "전체 종목 중앙값"
-        r["bench"] = {"per": bper, "per_src": bper_src, "pbr": bpbr, "pbr_src": bpbr_src}
+        if not r.get("bench"):
+            if ss["n_pbr"] >= min_n:
+                bpbr, bpbr_src = ss["pbr_median"], f"{r['sector']} 업종 중앙값({ss['n_pbr']}종목)"
+            else:
+                bpbr, bpbr_src = all_pbr, "전체 종목 중앙값"
+            r["bench"] = {"per": bper, "per_src": bper_src, "pbr": bpbr, "pbr_src": bpbr_src}
         r["intrinsic"], r["intrinsic_basis"] = thesis.intrinsic_value(r, cfg_sc)
         r["mos_pct"] = (r["intrinsic"] / r["price"] - 1) * 100 if (r["intrinsic"] and r["price"]) else None
         r["intrinsic_outlier"] = False
@@ -493,7 +505,8 @@ def main(argv=None) -> int:
             "club_sector": r.get("club_sector"), "rank": r["rank"], "price": r["price"], "change_pct": r["change_pct"],
             "mcap_eok": r["mcap_eok"], "per": r["per"], "pbr": r["pbr"], "fwd_per": r["fwd_per"], "roe": r["roe"],
             "div_yield": r["div_yield"], "target": r["target"], "target_source": r["target_source"],
-            "weight_pct": r["weight_pct"], "bucket": r.get("bucket"), "summary": (r.get("summary") or [])[:2],
+            "weight_pct": r["weight_pct"], "bucket": r.get("bucket"), "weight_why": r.get("weight_why"),
+            "group": r.get("group"), "is_holdco": r.get("is_holdco"), "summary": (r.get("summary") or [])[:2],
             "thesis": r["thesis"], "mos_pct": r.get("mos_pct"), "intrinsic": r.get("intrinsic"),
             "alpha": {"surprise": r.get("surprise_pct"), "surprise_q": r.get("surprise_q"), "q_op_yoy": r.get("q_op_yoy"),
                       "last_q": r.get("last_q"), "orders": (r.get("orders") or {}).get("count"),

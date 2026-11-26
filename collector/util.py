@@ -111,6 +111,13 @@ def lin_score(x: float | None, worst: float, best: float) -> float | None:
     return clamp((x - worst) / (best - worst) * 100.0, 0.0, 100.0)
 
 
+def concave_score(x: float | None, worst: float, best: float) -> float | None:
+    """lin_score 의 오목(√) 버전: 중간값은 후하게, 상단은 천천히 100점에 닿는다.
+    → 업사이드·성장률이 큰 종목들이 모두 100점에 몰려 변별력이 사라지는 문제를 줄인다."""
+    v = lin_score(x, worst, best)
+    return None if v is None else 100.0 * (v / 100.0) ** 0.5
+
+
 def tick_size(price: float) -> int:
     """KRX 주식 호가가격단위 (2023-01-25 시행, 코스피·코스닥 통일)."""
     if price < 2000:

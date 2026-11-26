@@ -103,7 +103,7 @@
         <div class="hs">${esc(String(m.generated_at || "").replace(" KST", ""))} 갱신 · 코스피·코스닥 ${n0(u.listed)}개 중</div></div>
     </div>
     <div class="hcard macro2">${macroHtml(m)}</div>${warn}`;
-    $status.querySelectorAll(".pslice[data-href]").forEach((g) => g.addEventListener("click", () => { location.hash = g.dataset.href; }));
+    Viz.bindRing($status);
     $status.querySelectorAll(".ich").forEach((el) => Viz.indexChart(el, (IS[el.dataset.sym] || {}).rows, { height: window.innerWidth < 720 ? 70 : 96 }));
     $status.querySelectorAll(".cu").forEach((el) => { const v = parseFloat(el.dataset.to); if (isFinite(v)) Viz.countUp(el, v, { dec: +(el.dataset.dec || 0) }); });
     $status.querySelectorAll("[data-grade]").forEach((a) => a.addEventListener("click", (e) => {
@@ -112,30 +112,100 @@
     }));
   }
 
+  const SEC_PAL = ["#3182f6", "#22b8cf", "#8b7cf6", "#4dabf7", "#3fd0a4", "#b197fc", "#5c7cfa", "#66d9e8"];
+  const NONSTOCK = { etf: "#63e6be", short_bond: "#ffc342", gov_bond: "#ff922b", cash: "#5a6070" };
+  function lighten(hex, t) {
+    const n = hex.match(/\w\w/g).map((h) => parseInt(h, 16));
+    return "#" + n.map((x) => Math.round(x + (255 - x) * t).toString(16).padStart(2, "0")).join("");
+  }
+
   function portfolioTop() {
-    const m = DATA.meta, port = m.portfolio || {}, alloc = port.allocation || [], c = m.cash || {};
-    const P = DATA.stocks.filter((s) => s.weight_pct > 0).sort((a, b) => (a.bucket === b.bucket ? b.weight_pct - a.weight_pct : a.bucket === "코어" ? -1 : 1));
+    const m = DATA.meta, port = m.portfolio || {}, alloc = port.allocation || [];
     if (!alloc.length) return "";
-    const eq = alloc.filter((a) => ["core", "sat", "etf"].includes(a.key)).reduce((x, a) => x + a.pct, 0);
-    const pal = { 코어: ["#1d6ff2", "#3182f6", "#5b9bff", "#8ab6ff"], 새틀라이트: ["#8b5cf6", "#b49cfb"] };
-    const cnt = { 코어: 0, 새틀라이트: 0 };
-    const stockParts = P.map((s) => ({ label: s.name, value: s.weight_pct, color: pal[s.bucket][cnt[s.bucket]++ % pal[s.bucket].length],
-      tip: `${esc(s.name)} ${s.weight_pct.toFixed(1)}% · ${esc(s.bucket)} · ${gradeShort[s.score.grade]} ${isNum(s.score.total) ? s.score.total.toFixed(0) + "점" : ""}`, href: `#/stock/${s.code}` }));
-    if (port.index_etf_pct > 0) stockParts.push({ label: "지수 ETF", value: port.index_etf_pct, color: "#2fca73", tip: `지수 ETF(코스피200) ${port.index_etf_pct.toFixed(1)}%` });
-    const center = (t, sub) => `<text x="50%" y="47%" text-anchor="middle" font-size="22" font-weight="800" fill="#f2f3f5">${t}</text><text x="50%" y="59%" text-anchor="middle" font-size="11" fill="#7d818b">${sub}</text>`;
+    const byCode = Object.fromEntries(DATA.stocks.map((s) => [s.code, s]));
+    // 섹터별 묶음 (구버전 데이터면 종목에서 직접 계산)
+    let secs = port.sectors;
+    if (!secs) {
+      const mp = {};
+      DATA.stocks.filter((s) => s.weight_pct > 0).forEach((s) => {
+        const d = (mp[s.sector] = mp[s.sector] || { sector: s.sector, pct: 0, stocks: [] });
+        d.pct += s.weight_pct; d.stocks.push({ code: s.code, name: s.name, pct: s.weight_pct, bucket: s.bucket });
+      });
+      secs = Object.values(mp).sort((a, b) => b.pct - a.pct);
+      if (port.index_etf_pct > 0) secs.push({ sector: "지수 ETF(코스피200)", pct: port.index_etf_pct, stocks: [], etf: true });
+    }
+    const secCol = {};
+    let ci = 0;
+    secs.forEach((d) => { secCol[d.sector] = d.etf ? NONSTOCK.etf : SEC_PAL[ci++ % SEC_PAL.length]; });
+    const eq = secs.reduce((a, d) => a + d.pct, 0);
+    const non = alloc.filter((a) => ["short_bond", "gov_bond", "cash"].includes(a.key));
+    const nonTot = non.reduce((a, x) => a + x.pct, 0);
+
+    // ① 전체 자산: 주식(섹터별) + 주식 외
+    const p1 = secs.map((d, i) => ({ key: "s" + i, label: d.sector, value: d.pct, color: secCol[d.sector],
+      tip: `<b>${esc(d.sector)}</b> ${d.pct.toFixed(1)}%${d.stocks.length ? "<br>" + d.stocks.map((x) => `${esc(x.name)} ${x.pct.toFixed(1)}%`).join(" · ") : ""}` }))
+      .concat(non.map((a) => ({ key: a.key, label: a.label, value: a.pct, color: NONSTOCK[a.key], tip: `<b>${esc(a.label)}</b> ${a.pct.toFixed(1)}%<br>${esc(a.note)}` })));
+    const stockKeys = secs.map((_, i) => "s" + i);
+    const ring1 = Viz.ring(p1, { center: { value: eq.toFixed(0) + "%", label: "주식 비중" }, bracket: { keys: stockKeys, color: "#3182f6" } });
+    const leg1 = `<div class="lgrp"><div class="lgh"><span class="lgdot" style="background:#3182f6"></span>주식 <b>${eq.toFixed(1)}%</b><em>${secs.filter((d) => !d.etf).length}개 섹터</em></div>
+        ${secs.map((d, i) => `<div class="lrow" data-k="s${i}"><i style="background:${secCol[d.sector]}"></i><span>${esc(d.sector)}<em>${d.stocks.map((x) => esc(x.name)).join(", ")}</em></span><b>${d.pct.toFixed(1)}%</b></div>`).join("")}</div>
+      <div class="lgrp"><div class="lgh"><span class="lgdot" style="background:#8b8f98"></span>주식 외 <b>${nonTot.toFixed(1)}%</b><em>현금 비중 ${m.cash?.cash_pct ?? "-"}%를 나눠 둠</em></div>
+        ${non.map((a) => `<div class="lrow" data-k="${a.key}" data-tip="${esc(a.note)}"><i style="background:${NONSTOCK[a.key]}"></i><span>${esc(a.label)}</span><b>${a.pct.toFixed(1)}%</b></div>`).join("")}</div>`;
+
+    // ② 주식 몫 안의 종목 (섹터 색을 이어받음)
+    const P = [];
+    secs.forEach((d) => d.stocks.forEach((x, j) => P.push({ ...x, sector: d.sector, color: j ? lighten(secCol[d.sector], 0.35 * j) : secCol[d.sector] })));
+    const p2 = P.map((x) => {
+      const s = byCode[x.code] || {};
+      return { key: "c" + x.code, label: x.name, value: x.pct, color: x.color, href: `#/stock/${x.code}`,
+        tip: `<b>${esc(x.name)}</b> ${x.pct.toFixed(1)}% · ${esc(x.sector)}<br>${esc(s.weight_why || "")}` };
+    });
+    if (port.index_etf_pct > 0) p2.push({ key: "etf2", label: "지수 ETF", value: port.index_etf_pct, color: NONSTOCK.etf, tip: "비중 상한·섹터 상한으로 남은 주식 몫" });
+    const ring2 = Viz.ring(p2, { center: { value: P.length + "종목", label: `주식 ${eq.toFixed(0)}% 안에서` }, bracket: { keys: [], color: "#3182f6" } });
+    const leg2 = `<div class="lgrp">${P.map((x) => {
+      const s = byCode[x.code] || {}, sc = s.score || {};
+      return `<a class="lrow stock" data-k="c${esc(x.code)}" href="#/stock/${esc(x.code)}" data-tip="${esc(s.weight_why || "")}"><i style="background:${x.color}"></i>
+        <span><b class="nm2">${esc(x.name)}</b><em>${esc(x.sector)} · ${esc(x.bucket || "")}${s.is_holdco ? " · 지주사" : ""} · ${gradeShort[sc.grade] || ""} ${isNum(sc.total) ? sc.total.toFixed(0) + "점" : ""}</em></span><b>${x.pct.toFixed(1)}%</b></a>`;
+    }).join("")}
+      ${port.index_etf_pct > 0 ? `<div class="lrow" data-k="etf2"><i style="background:${NONSTOCK.etf}"></i><span>지수 ETF (코스피200)<em>상한으로 남은 주식 몫</em></span><b>${port.index_etf_pct.toFixed(1)}%</b></div>` : ""}
+      ${!P.length ? '<p class="muted small">현재 매수 등급 종목이 없어 주식 몫은 지수 ETF로 채웁니다.</p>' : ""}</div>`;
+
     return `<div class="ptop">
-      <div class="ptop-h"><div><h2>오늘의 포트폴리오</h2><div class="hs">총자산 100% 기준 · 주식 ${eq.toFixed(0)}% / 주식 외 ${(100 - eq).toFixed(0)}% · ${esc(String(m.generated_at || "").replace(" KST", ""))}</div></div>
+      <div class="ptop-h"><div><h2>오늘의 포트폴리오</h2><div class="hs">총자산 100% 기준 · ${esc(String(m.generated_at || "").replace(" KST", ""))}</div></div>
         <a class="pbtn" href="#/rules">배분 원칙 →</a></div>
       <div class="pgrid">
-        <div class="pcol"><div class="pt">전체 자산 배분</div>
-          <div class="prow2">${Viz.pie(alloc.map((a) => ({ label: a.label, value: a.pct, color: a.color, tip: `${a.label} ${a.pct.toFixed(1)}% — ${a.note}` })), 190, { hole: 52, center: center(eq.toFixed(0) + "%", "주식 비중") })}
-            <div class="plegend">${alloc.map((a) => `<div class="pl" data-tip="${esc(a.note)}"><i style="background:${a.color}"></i><span>${esc(a.label)}</span><b>${a.pct.toFixed(1)}%</b></div>`).join("")}</div></div></div>
-        <div class="pcol"><div class="pt">주식 몫 구성 <span class="tmuted">코어 ${port.core?.length || 0} · 새틀라이트 ${port.satellite?.length || 0}${port.satellite_boost ? " · 개꿀 가중" : ""}</span></div>
-          <div class="prow2">${Viz.pie(stockParts, 190, { hole: 52, center: center(P.length + "종목", "+ 지수 ETF") })}
-            <div class="plegend">${P.map((s, i) => `<a class="pl stock" href="#/stock/${esc(s.code)}"><i style="background:${stockParts[i].color}"></i><span><b class="nm2">${esc(s.name)}</b><em>${esc(s.bucket)} · ${gradeShort[s.score.grade]} · 업사이드 ${sgn(s.score.upside_pct, 0)}</em></span><b>${s.weight_pct.toFixed(1)}%</b></a>`).join("")}
-              ${port.index_etf_pct > 0 ? `<div class="pl"><i style="background:#2fca73"></i><span><b class="nm2">지수 ETF (코스피200)</b><em>비중 상한으로 남은 주식 몫</em></span><b>${port.index_etf_pct.toFixed(1)}%</b></div>` : ""}
-              ${!P.length ? '<p class="muted small">현재 매수 등급 종목이 없어 주식 몫은 지수 ETF로 채웁니다.</p>' : ""}</div></div></div>
-      </div></div>`;
+        <div class="pcol" data-ring><div class="pt">전체 자산 배분 <span class="tmuted">파란 테두리 = 주식</span></div>
+          <div class="prow2">${ring1}<div class="plegend">${leg1}</div></div></div>
+        <div class="pcol" data-ring><div class="pt"><span class="lgdot" style="background:#3182f6"></span>주식 ${eq.toFixed(0)}%는 이렇게 <span class="tmuted">섹터 색 · 눌러서 상세</span></div>
+          <div class="prow2">${ring2}<div class="plegend">${leg2}</div></div></div>
+      </div>${selectionHtml(port)}</div>`;
+  }
+
+  function selectionHtml(port) {
+    const log = port.log || [], R = port.rules || {};
+    if (!log.length) return "";
+    const nIn = log.filter((e) => e.status === "in").length;
+    const kinds = {};
+    log.filter((e) => e.status === "out").forEach((e) => {
+      const k = /그룹/.test(e.why) ? "그룹 중복" : /섹터/.test(e.why) ? "섹터 쏠림" : /정원/.test(e.why) ? "정원 마감" : "퀄리티";
+      kinds[k] = (kinds[k] || 0) + 1;
+    });
+    const steps = [
+      ["1", "전 종목 채점", "업사이드·가치·성장·알파·가격위험"],
+      ["2", "🟢·🟡만 후보", "점수 높은 순으로 훑기"],
+      ["3", "코어 / 새틀라이트", `시총 ${((R.core_min_mcap_eok || 20000) / 10000).toFixed(0)}조↑ 퀄리티 통과 ${R.core_size || 4}개 · 중소형 ${R.satellite_size || 2}개`],
+      ["4", "분산 규칙", `같은 그룹 1개 · 섹터 ${R.max_per_sector || 2}종목·주식 몫 ${R.max_sector_pct || 40}%까지`],
+      ["5", "비중", "점수 × (1+안전마진) ÷ 변동성, 종목 상한"],
+    ];
+    return `<details class="sel" open><summary><span class="pt" style="margin:0">어떻게 골랐나</span>
+        <span class="tmuted">후보 ${log.length}개 심사 · 편입 ${nIn} · ${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ")}</span></summary>
+      <div class="ssteps">${steps.map(([n, t, d]) => `<div class="sst"><span class="sn">${n}</span><div><b>${t}</b><em>${esc(d)}</em></div></div>`).join("")}</div>
+      <div class="slog">${log.map((e) => `<a class="sl ${e.status}" href="#/stock/${esc(e.code)}">
+          <span class="sl-t">${e.status === "in" ? "편입" : "제외"}</span>
+          <span class="sl-n"><b>${esc(e.name)}</b><em>${esc(e.sector)} · ${esc(e.bucket)}${e.holdco ? " · 지주사" : ""}</em></span>
+          <span class="sl-s">${isNum(e.total) ? e.total.toFixed(1) : "-"}점</span>
+          <span class="sl-w">${e.status === "in" ? `<b>${(e.weight_pct || 0).toFixed(1)}%</b>` : esc(e.why)}</span></a>`).join("")}</div>
+      <p class="tiny muted" style="margin:10px 2px 0">점수는 사람이 고른 테마·업황 판단이 아니라 수집된 숫자로만 계산합니다. 업황 전망(예: 반도체 사이클)은 반영돼 있지 않으니 최종 판단은 직접 해 주세요.</p></details>`;
   }
 
   function macroHtml(m) {

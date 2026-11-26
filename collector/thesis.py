@@ -26,7 +26,12 @@ def intrinsic_value(r: dict, cfg: dict) -> tuple[float | None, str | None]:
     mult = min(bper, tc["intrinsic_per_cap"])
     cut = tc["intrinsic_eps_haircut"]
     val = eps * (1 - cut) * mult
-    basis = f"{r.get('fwd_basis_short') or '예상'} EPS {eps:,.0f}원 × (1−{cut * 100:.0f}% 감익 가정) × 업종 중앙 PER {mult:.1f}배"
+    who = "지주사 중앙 PER" if (r.get("bench") or {}).get("holdco") else "업종 중앙 PER"
+    basis = f"{r.get('fwd_basis_short') or '예상'} EPS {eps:,.0f}원 × (1−{cut * 100:.0f}% 감익 가정) × {who} {mult:.1f}배"
+    if r.get("is_holdco"):
+        h = tc.get("holdco_haircut", 0)
+        val *= 1 - h
+        basis += f" × (1−{h * 100:.0f}% 지주 할인)"
     return val, basis
 
 
@@ -42,6 +47,8 @@ def conservative_target(r: dict, cfg: dict) -> tuple[float | None, str | None]:
                 return v, {"consensus": "컨센서스", "model": "내재가치", "club": "모임"}[k]
         return None, None
     cons_h = cons * tc["consensus_haircut"] if cons else None
+    if cons_h and r.get("is_holdco"):
+        cons_h *= 1 - tc.get("holdco_haircut", 0)  # 지주사 목표가(NAV 기반)도 할인이 현실화되지 않는 경우가 많다
     if cons_h and iv:
         return (cons_h, "보수적 목표가") if cons_h <= iv else (iv, "내재가치")
     if cons_h:
@@ -155,6 +162,8 @@ def build(r: dict, macro_notes: list[str] | None = None) -> dict:
     # ---------- Risk
     for f in sc.get("quality_fails") or []:
         risks.append((60, f"퀄리티 미달(감점): {f}"))
+    if r.get("is_holdco"):
+        risks.append((58, "지주사 — 자회사 지분가치로 움직이고 '지주 할인'이 잘 안 풀림 (지주사끼리 PER 비교 + 목표가 20% 추가 할인 반영)"))
     if sc.get("falling_knife"):
         risks.append((50, f"하락 추세 — 3개월 {_p(r.get('ret_3m') or 0)}, 200일선 아래 (−3점, 분할매수로 접근)"))
     if up is not None and up <= 0:

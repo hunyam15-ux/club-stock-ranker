@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-from .util import clamp, lin_score
+from .util import clamp, concave_score, lin_score
 
 GRADES = {
     "green": {"emoji": "🟢", "label": "개꿀(적극 매수)"},
@@ -71,7 +71,7 @@ def score_stock(s: dict, cfg: dict) -> dict:
     up_s = up
     if up is not None and not s.get("has_consensus"):
         up_s = up * cfg["target"].get("model_upside_weight", 1.0)  # 컨센서스 없는 추정 목표가는 할인 반영
-    comps["upside"] = {"score": lin_score(up_s, u["worst_pct"], u["best_pct"]), "value": up}
+    comps["upside"] = {"score": concave_score(up_s, u["worst_pct"], u["best_pct"]), "value": up}
 
     # 2) 가치 — 업종 대비 PER·PBR, Forward PER, 안전마진 -------------------
     v = cfg["valuation"]
@@ -95,7 +95,7 @@ def score_stock(s: dict, cfg: dict) -> dict:
             fwd_r = s["fwd_per"] / s["per"]
             fwd_s = lin_score(fwd_r, v["fwd_ratio_worst"], v["fwd_ratio_best"])
     mos = s.get("mos_pct")
-    mos_s = lin_score(mos, v["mos_worst_pct"], v["mos_best_pct"])
+    mos_s = concave_score(mos, v["mos_worst_pct"], v["mos_best_pct"])
     sw = v["sub_weights"]
     comps["value"] = {"score": _wavg({"per": (per_s, sw["per_vs_sector"]), "pbr": (pbr_s, sw["pbr_vs_sector"]),
                                       "fwd": (fwd_s, sw["forward_per"]), "mos": (mos_s, sw["margin_of_safety"])}),
@@ -105,9 +105,9 @@ def score_stock(s: dict, cfg: dict) -> dict:
     # 3) 성장 — EPS·영업이익 성장 -----------------------------------------
     gcfg = cfg["growth"]
     g = s.get("eps_growth")
-    g_s = float(gcfg["turnaround_score"]) if s.get("turnaround") else lin_score(g, gcfg["worst_pct"], gcfg["best_pct"])
+    g_s = float(gcfg["turnaround_score"]) if s.get("turnaround") else concave_score(g, gcfg["worst_pct"], gcfg["best_pct"])
     og = s.get("op_growth")
-    og_s = lin_score(og, gcfg["worst_pct"], gcfg["best_pct"])
+    og_s = concave_score(og, gcfg["worst_pct"], gcfg["best_pct"])
     gsw = gcfg["sub_weights"]
     comps["growth"] = {"score": _wavg({"eps": (g_s, gsw["eps_growth"]), "op": (og_s, gsw["op_growth"])}),
                        "eps_growth": g, "op_growth": og, "sub": {"eps_growth": g_s, "op_growth": og_s}}
@@ -118,7 +118,7 @@ def score_stock(s: dict, cfg: dict) -> dict:
     if sur is not None:
         sur_s, sur_kind = lin_score(sur, a["surprise_worst_pct"], a["surprise_best_pct"]), "서프라이즈"
     elif s.get("q_op_yoy") is not None:
-        sur_s, sur_kind = lin_score(s["q_op_yoy"], a["q_yoy_worst_pct"], a["q_yoy_best_pct"]), "분기 영업이익 YoY(대리)"
+        sur_s, sur_kind = concave_score(s["q_op_yoy"], a["q_yoy_worst_pct"], a["q_yoy_best_pct"]), "분기 영업이익 YoY(대리)"
     elif s.get("q_turnaround"):
         sur_s, sur_kind = 80.0, "분기 흑자전환"
     else:
@@ -232,7 +232,7 @@ def reason_line(s: dict, r: dict) -> str:
     pr = c["value"].get("per_ratio")
     if pr is not None:
         d = (1 - pr) * 100
-        txt = f"PER 업종 대비 {abs(d):.0f}% {'할인' if d >= 0 else '할증'}"
+        txt = f"PER {'지주사' if s.get('is_holdco') else '업종'} 대비 {abs(d):.0f}% {'할인' if d >= 0 else '할증'}"
         if d >= 15:
             pos.append((d, txt))
         elif d <= -30:

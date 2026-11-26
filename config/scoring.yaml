@@ -29,8 +29,8 @@ missing_component_score: 30   # 데이터 없는 항목 점수(보수적)
 
 # ---- 등급 기준 (총점) ----
 grades:
-  green: 70
-  yellow: 58
+  green: 66                  # (√ 곡선 도입으로 점수대가 전반적으로 내려가 70→66)
+  yellow: 55
   white: 45
   min_coverage: 0.7          # 충족률 70% 미만이면 🔴 대신 ⚪(데이터 부족) 표시
   red_if_negative_upside: true
@@ -45,6 +45,7 @@ target:
   intrinsic_per_cap: 25      # 업종 PER 상한
   model_max_upside_pct: 50   # 컨센서스 없이 내재가치만 있을 때 업사이드 상한
   intrinsic_outlier_pct: 300 # 내재가치가 현재가 +300% 초과면 이상치로 보고 사용하지 않음
+  holdco_haircut: 0.2        # 지주사: 지주사끼리 PER 비교 + 목표가·내재가치 20% 추가 할인(지주 할인은 잘 안 풀린다)
   source_order: [consensus, model, club]   # (consensus_first 모드에서만 사용)
   model_haircut: 0.85
   model_per_cap: 30
@@ -55,7 +56,8 @@ target:
 # ---- 1. 업사이드 ----
 upside:
   worst_pct: 0               # 보수적 목표가 대비 0% 이하 → 0점
-  best_pct: 60               # +60% 이상 → 100점
+  best_pct: 120              # +120% 이상 → 100점, √ 곡선(+40% ≈ 58점, +60% ≈ 71점, +100% ≈ 91점)
+                             # (+60%=100점 직선이었을 때 상위 종목이 모두 100점이라 변별력이 없었음)
 
 # ---- 2. 가치 ----
 valuation:
@@ -64,7 +66,7 @@ valuation:
   ratio_worst: 1.3           # 1.3 → 0점
   fwd_ratio_best: 0.6
   fwd_ratio_worst: 1.1
-  mos_best_pct: 50           # 안전마진(내재가치/현재가−1) +50% → 100점
+  mos_best_pct: 120          # 안전마진(내재가치/현재가−1) +120% → 100점 (√ 곡선)
   mos_worst_pct: -10         # −10% → 0점
   loss_making_score: 0
   sector_min_members: 3
@@ -73,7 +75,7 @@ valuation:
 growth:
   sub_weights: {eps_growth: 0.5, op_growth: 0.5}
   worst_pct: -10
-  best_pct: 50
+  best_pct: 100              # √ 곡선: +25% ≈ 56점, +50% ≈ 74점, +100% = 100점
   turnaround_score: 70
 
 # ---- 4. 알파 (모임 자료: 실적 vs 컨센서스, 장비 수주잔고, 컨센서스 추이) ----
@@ -82,7 +84,7 @@ alpha:
   surprise_worst_pct: -10    # 최근 분기 영업이익 / 발표 직전 컨센서스 − 1
   surprise_best_pct: 15
   q_yoy_worst_pct: -20       # 서프라이즈 기록이 쌓이기 전 대리 지표: 최근 분기 영업이익 YoY
-  q_yoy_best_pct: 60
+  q_yoy_best_pct: 150        # √ 곡선
   orders_worst_pct: 0        # 최근 6개월 단일판매·공급계약 공시 합계(최근 매출 대비 %)
   orders_best_pct: 30
   orders_months: 6
@@ -139,6 +141,10 @@ strategy:
     boost_ratio: 0.3                #   새틀라이트 몫을 30%까지,
     boost_max_weight_pct: 15        #   한 종목 15%까지 허용
     # 비중 상한 때문에 못 쓴 주식 몫은 지수 ETF(코스피200)로 채움
+  diversification:
+    one_per_group: true             # 같은 그룹은 1종목만 (예: HD현대·HD건설기계, SK스퀘어·SK하이닉스)
+    max_per_sector: 2               # 한 섹터 최대 2종목
+    max_sector_pct: 40              # 한 섹터 합계는 주식 몫의 40%까지 (넘치면 지수 ETF)
   value_weighting: true             # 비중 ∝ 총점 × (1+안전마진) ÷ 변동성 (가치 가중)
 
 # ---- 현금 관리: 정률투자 + 추세 + 절대모멘텀 + 매크로 불안요소 ----

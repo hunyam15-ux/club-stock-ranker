@@ -53,19 +53,56 @@ def exit_plan(price: float, target: float | None, cfg: dict) -> dict:
 
 
 def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
-    """코어(대형주) & 새틀라이트(중소형) + 가치 가중.
-    - 코어: 시총 기준 이상 · 퀄리티 통과 🟢/🟡 상위 core_size 종목 → 주식 몫 × core_ratio
-    - 새틀라이트: 나머지 🟢/🟡 상위 satellite_size 종목 → 주식 몫 × (1−core_ratio)
-      단, 새틀라이트가 🟢 · 총점 boost_score 이상이면 boost_ratio·boost_max_weight 까지 허용
-    - 비중 ∝ 등급배수 × 총점 × (1+안전마진) ÷ 변동성, 상한으로 남는 몫은 지수 ETF"""
+    """코어(대형주) & 새틀라이트(중소형) + 분산 규칙 + 가치 가중.
+    - 점수순으로 후보를 훑으며 담는다(🟢/🟡만).
+      코어: 시총 기준 이상 · 퀄리티 통과, 최대 core_size / 새틀라이트: 중소형, 최대 satellite_size
+    - 분산: 같은 그룹은 1종목(지주사-자회사 중복 방지), 한 섹터 최대 max_per_sector 종목,
+      섹터 합계는 주식 몫의 max_sector_pct 까지(넘치면 지수 ETF로)
+    - 새틀라이트가 🟢 · 총점 boost_score 이상이면 boost_ratio·boost_max_weight 까지 허용
+    - 비중 ∝ 등급배수 × 총점 × (1+안전마진) ÷ 변동성, 상한으로 남는 몫은 지수 ETF
+    - 왜 담았고 왜 뺐는지(log)를 함께 돌려준다"""
     sc = cfg["strategy"]
     cs = sc["core_satellite"]
+    dv = sc.get("diversification", {})
     mult = sc["grade_multiplier"]
+    max_sec = dv.get("max_per_sector", 99)
     elig = [s for s in stocks if s["score"]["grade"] in ("green", "yellow") and s["score"]["total"]]
-    core = [s for s in elig if (s.get("mcap_eok") or 0) >= cs["core_min_mcap_eok"] and not s["score"]["quality_fails"]][: cs["core_size"]]
-    core_codes = {s["code"] for s in core}
-    sat = [s for s in elig if s["code"] not in core_codes
-           and (s.get("mcap_eok") or 0) < cs["core_min_mcap_eok"]][: cs["satellite_size"]]  # 새틀라이트 = 중소형만
+    elig.sort(key=lambda s: -s["score"]["total"])
+    core, sat, log = [], [], []
+    groups: dict[str, str] = {}
+    sec_n: dict[str, int] = {}
+    skipped = 0
+    for s in elig:
+        if len(core) >= cs["core_size"] and len(sat) >= cs["satellite_size"] and (skipped >= 6 or len(log) >= 16):
+            break
+        big = (s.get("mcap_eok") or 0) >= cs["core_min_mcap_eok"]
+        bucket = "코어" if big else "새틀라이트"
+        nm = s.get("name") or s["code"]
+        g, sec = s.get("group") or nm, s.get("sector") or "미분류"
+        why = None
+        if big and s["score"].get("quality_fails"):
+            why = "퀄리티 미달(" + ", ".join(s["score"]["quality_fails"]) + ") — 코어는 퀄리티 통과 대형주만"
+        elif dv.get("one_per_group", True) and g in groups:
+            why = f"같은 {g} 그룹({groups[g]})이 이미 들어감 — 그룹 중복 방지"
+        elif sec_n.get(sec, 0) >= max_sec:
+            why = f"{sec} 섹터는 이미 {max_sec}종목 — 섹터 쏠림 방지"
+        elif bucket == "코어" and len(core) >= cs["core_size"]:
+            why = f"코어 정원 {cs['core_size']}종목이 점수 더 높은 종목으로 참"
+        elif bucket == "새틀라이트" and len(sat) >= cs["satellite_size"]:
+            why = f"새틀라이트 정원 {cs['satellite_size']}종목이 점수 더 높은 종목으로 참"
+        entry = {"code": s["code"], "name": nm, "sector": sec, "group": g, "total": s["score"]["total"],
+                 "grade": s["score"]["grade"], "mcap_eok": s.get("mcap_eok"), "bucket": bucket,
+                 "holdco": bool(s.get("is_holdco"))}
+        if why:
+            skipped += 1
+            entry.update(status="out", why=why)
+        else:
+            (core if bucket == "코어" else sat).append(s)
+            groups[g] = nm
+            sec_n[sec] = sec_n.get(sec, 0) + 1
+            entry.update(status="in", why=f"{bucket} 후보 중 점수 {len(core) if bucket == '코어' else len(sat)}위")
+        log.append(entry)
+
     boost = any(s["score"]["grade"] == "green" and s["score"]["total"] >= cs["boost_score"] for s in sat)
     sat_ratio = cs["boost_ratio"] if boost else 1 - cs["core_ratio"]
     investable = 100 - cash_pct
@@ -73,7 +110,7 @@ def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
     if not sat:
         budgets = {"코어": investable, "새틀라이트": 0}
     for s in stocks:
-        s["weight_pct"], s["bucket"] = 0.0, None
+        s["weight_pct"], s["bucket"], s["weight_why"] = 0.0, None, None
 
     def raw(s):
         vol = s.get("vol_annual") or 40.0
@@ -85,10 +122,55 @@ def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
     for name, bucket in (("코어", core), ("새틀라이트", sat)):
         w = _alloc({s["code"]: raw(s) for s in bucket}, budgets[name], caps[name])
         for s in bucket:
-            s["weight_pct"], s["bucket"] = round(w.get(s["code"], 0.0), 1), name
+            s["weight_pct"], s["bucket"] = w.get(s["code"], 0.0), name
+
+    # 섹터 합계 상한(주식 몫 대비)
+    sec_cap = investable * dv.get("max_sector_pct", 100) / 100
+    trimmed = []
+    picks = core + sat
+    for sec in {s.get("sector") or "미분류" for s in picks}:
+        mem = [s for s in picks if (s.get("sector") or "미분류") == sec]
+        tot = sum(s["weight_pct"] for s in mem)
+        if tot > sec_cap + 1e-9:
+            f = sec_cap / tot
+            for s in mem:
+                s["weight_pct"] *= f
+            trimmed.append(sec)
+    for s in picks:
+        vol = s.get("vol_annual")
+        mos = s.get("mos_pct")
+        parts = [f"점수 {s['score']['total']:.0f}"]
+        if mos is not None:
+            parts.append(f"안전마진 {mos:+.0f}%")
+        if vol is not None:
+            parts.append(f"변동성 {vol:.0f}%")
+        cap = caps[s["bucket"]]
+        hit = " · 상한 도달" if s["weight_pct"] >= cap - 0.05 else ""
+        cut = " · 섹터 상한으로 축소" if (s.get("sector") or "미분류") in trimmed else ""
+        s["weight_why"] = " · ".join(parts) + f" → {s['weight_pct']:.1f}% (한 종목 상한 {cap:.0f}%{hit}{cut})"
+        s["weight_pct"] = round(s["weight_pct"], 1)
     used = sum(s["weight_pct"] for s in stocks)
+
+    for e in log:
+        if e["status"] == "in":
+            s = next(x for x in picks if x["code"] == e["code"])
+            e["weight_pct"] = s["weight_pct"]
+    sectors: dict[str, dict] = {}
+    for s in sorted(picks, key=lambda x: -x["weight_pct"]):
+        d = sectors.setdefault(s.get("sector") or "미분류", {"sector": s.get("sector") or "미분류", "pct": 0.0, "stocks": []})
+        d["pct"] += s["weight_pct"]
+        d["stocks"].append({"code": s["code"], "name": s.get("name") or s["code"], "pct": s["weight_pct"], "bucket": s["bucket"]})
+    etf = round(max(0.0, investable - used), 1)
+    sec_list = sorted(sectors.values(), key=lambda d: -d["pct"])
+    for d in sec_list:
+        d["pct"] = round(d["pct"], 1)
+    if etf > 0:
+        sec_list.append({"sector": "지수 ETF(코스피200)", "pct": etf, "stocks": [], "etf": True})
     return {"core": [s["code"] for s in core], "satellite": [s["code"] for s in sat], "budgets": budgets,
-            "satellite_boost": boost, "index_etf_pct": round(max(0.0, investable - used), 1), "caps": caps}
+            "satellite_boost": boost, "index_etf_pct": etf, "caps": caps, "log": log, "sectors": sec_list,
+            "rules": {"one_per_group": dv.get("one_per_group", True), "max_per_sector": max_sec,
+                      "max_sector_pct": dv.get("max_sector_pct"), "core_size": cs["core_size"],
+                      "satellite_size": cs["satellite_size"], "core_min_mcap_eok": cs["core_min_mcap_eok"]}}
 
 
 def asset_allocation(stocks: list[dict], port: dict, cash_pct: float, macro: dict | None, cfg: dict) -> list[dict]:
@@ -106,8 +188,8 @@ def asset_allocation(stocks: list[dict], port: dict, cash_pct: float, macro: dic
     sp = pk["duration_split"] if dur else pk["base_split"]
     rest = cash_pct - standby
     out = [
-        {"key": "core", "label": "개별주식 · 코어", "pct": core, "color": "#3182f6", "note": "대형주 · 퀄리티 통과"},
-        {"key": "sat", "label": "개별주식 · 새틀라이트", "pct": sat, "color": "#a78bfa", "note": "중소형 알파" + (" (개꿀 가중)" if port.get("satellite_boost") else "")},
+        {"key": "stocks", "label": "개별주식", "pct": core + sat, "color": "#3182f6",
+         "note": f"코어(대형) {core:.1f}% · 새틀라이트(중소형) {sat:.1f}%" + (" · 개꿀 가중" if port.get("satellite_boost") else "")},
         {"key": "etf", "label": "지수 ETF (코스피200)", "pct": etf, "color": "#2fca73", "note": "종목 비중 상한으로 남은 주식 몫"},
         {"key": "short_bond", "label": "단기채·금리형 ETF", "pct": rest * sp["short_bond"], "color": "#ffc342", "note": "KOFR·CD금리·단기 국공채 — 매일 이자, 원금 변동 작음"},
         {"key": "gov_bond", "label": "국채 ETF(중장기)", "pct": rest * sp["gov_bond"], "color": "#f59e0b",
