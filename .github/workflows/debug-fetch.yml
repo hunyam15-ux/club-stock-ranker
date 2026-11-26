@@ -1,0 +1,53 @@
+name: (진단) 원천 페이지 저장
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: 종목코드
+        default: "005930"
+
+permissions:
+  contents: write
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install requests
+      - name: 원천 페이지 받기
+        env:
+          CODE: ${{ github.event.inputs.code }}
+        run: |
+          mkdir -p dbg && cd dbg
+          python - <<'EOF'
+          import os, requests
+          code = os.environ.get("CODE") or "005930"
+          ua = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+                "Accept-Language": "ko-KR,ko;q=0.9"}
+          urls = {
+            "fnguide_main.html": f"https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A{code}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701",
+            "naver_main.html": f"https://finance.naver.com/item/main.naver?code={code}",
+            "naver_integration.json": f"https://m.stock.naver.com/api/stock/{code}/integration",
+            "naver_finance_annual.json": f"https://m.stock.naver.com/api/stock/{code}/finance/annual",
+          }
+          for fn, u in urls.items():
+              try:
+                  r = requests.get(u, headers=ua, timeout=30)
+                  open(fn, "wb").write(r.content)
+                  print(fn, r.status_code, len(r.content), r.headers.get("content-type"))
+              except Exception as e:
+                  open(fn + ".err", "w").write(repr(e)); print(fn, "ERR", e)
+          EOF
+      - name: debug 브랜치에 저장
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan debug-dump
+          git rm -rq --cached .
+          git add dbg
+          git commit -qm "debug dump"
+          git push -f origin debug-dump
