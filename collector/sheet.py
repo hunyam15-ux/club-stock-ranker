@@ -196,6 +196,8 @@ def parse_sheet(text: str) -> tuple[list[SheetStock], dict]:
         # 텍스트 메모는 여러 번 발표된 경우 날짜와 함께 이어 붙인다
         for key in ("idea", "risk", "basis", "note", "qna", "etc"):
             v = cell(row, key)
+            if v.strip().upper() in ("N/A", "NA", "-", "#N/A"):
+                v = ""
             if v:
                 cur = getattr(st, key)
                 tag = f"[{pitch.date or '날짜 미상'} 발표 {pitch.presenter or ''}] " if cur else ""
