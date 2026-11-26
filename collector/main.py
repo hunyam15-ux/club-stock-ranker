@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from . import consensus, market, scoring, strategy, thesis, universe
+from . import consensus, macro, market, scoring, strategy, thesis, universe
 from .dart import Dart
 from .sheet import club_target, fetch_csv, parse_sheet
 from .util import first, log, median, now_kst, pct, session
@@ -93,6 +93,23 @@ def revision(code: str, annual: dict, year: int, snap: dict | None) -> tuple[flo
     return None, None
 
 
+def surprise(code: str, quarters: dict, history: list[dict]) -> tuple[float | None, str | None]:
+    """최근 확정 분기 영업이익 ÷ (발표 전 마지막으로 저장된 그 분기 컨센서스) − 1."""
+    act = sorted(k for k, v in quarters.items() if not v.get("estimate"))
+    if not act:
+        return None, None
+    k = act[-1]
+    actual = quarters[k].get("op_income")
+    est = None
+    for h in sorted(history, key=lambda x: x.get("date", "")):
+        v = ((h.get("items") or {}).get(code) or {}).get("q", {}).get(k)
+        if v is not None:
+            est = v  # 가장 최근(=발표 직전) 스냅샷 값이 남는다
+    if actual is None or not est or est <= 0:
+        return None, None
+    return (actual / est - 1) * 100, k
+
+
 # ------------------------------------------------------------------ 종목 1개 수집
 def collect_one(base: dict, st, today: datetime, cfg_set: dict) -> dict:
     """base: 전체 목록의 한 줄(현재가·시총 포함). st: 모임 시트 종목(없으면 None)."""
@@ -121,6 +138,11 @@ def collect_one(base: dict, st, today: datetime, cfg_set: dict) -> dict:
         annual, summary = consensus.fetch_finance(sess, code)
     except Exception as e:  # noqa: BLE001
         errors.append(f"네이버 재무·컨센서스: {e}")
+    quarters = {}
+    try:
+        quarters = consensus.fetch_quarter(sess, code)
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"네이버 분기 실적: {e}")
 
     price = first(base.get("price"), nv.get("price"), deriv.get("last_close"), st.sheet_price if st else None)
     if base.get("price") or nv.get("price"):
@@ -137,6 +159,13 @@ def collect_one(base: dict, st, today: datetime, cfg_set: dict) -> dict:
     est = consensus.estimates_for(annual, today.year)
     rec["annual"] = {y: annual[y] for y in sorted(annual)[-5:]}
     rec["est"] = est
+    rec["quarters"] = quarters
+    qs = consensus.quarter_signals(quarters)
+    rec.update(last_q=qs.get("last_q"), next_q=qs.get("next_q"), next_op_est=qs.get("next_op_est"),
+               q_op_yoy=qs.get("op_yoy"), q_op_qoq=qs.get("op_qoq"), q_turnaround=qs.get("op_turnaround"))
+    actual_years = sorted(y for y, v in annual.items() if not v.get("estimate"))
+    rec["op_income_last"] = annual[actual_years[-1]].get("op_income") if actual_years else None
+    rec["op_growth"] = first(est.get("op_income_g_next"), est.get("op_income_g_cur"))
 
     eps_cur, eps_next = est["cur"].get("eps"), est["next"].get("eps")
     fwd_eps, fwd_basis, short = None, None, None
@@ -162,7 +191,7 @@ def collect_one(base: dict, st, today: datetime, cfg_set: dict) -> dict:
     lo = first(nv.get("low52"), deriv.get("low52_calc"))
     rec.update(high52=hi, low52=lo)
     rec["range_pos"] = ((price - lo) / (hi - lo)) if (price and hi and lo and hi > lo) else None
-    for k in ("ret_1w", "ret_1m", "ret_3m", "ret_6m", "ret_12m", "vol_annual", "low_60d", "low_120d"):
+    for k in ("ret_1w", "ret_1m", "ret_3m", "ret_6m", "ret_12m", "vol_annual", "low_60d", "low_120d", "ma200", "below_ma200"):
         rec[k] = deriv.get(k)
 
     rec["target_cons"] = nv.get("cons_target")
@@ -211,11 +240,15 @@ def score_input(r: dict) -> dict:
         "price": r["price"], "target": r["target"], "target_source": r["target_source"],
         "per": r["per"], "pbr": r["pbr"], "fwd_per": r["fwd_per"],
         "bench_per": r["bench"]["per"], "bench_pbr": r["bench"]["pbr"],
-        "eps_growth_next": first(est.get("eps_g_next"), est.get("eps_g_cur")),
+        "eps_growth": first(est.get("eps_g_next"), est.get("eps_g_cur")),
         "eps_growth_label": r["eps_growth_label"],
-        "turnaround": r["turnaround"],
+        "op_growth": r.get("op_growth"), "turnaround": r["turnaround"],
+        "mos_pct": r.get("mos_pct"), "roe": r.get("roe"), "op_income_last": r.get("op_income_last"),
+        "surprise_pct": r.get("surprise_pct"), "q_op_yoy": r.get("q_op_yoy"), "q_turnaround": r.get("q_turnaround"),
+        "orders_pct": (r.get("orders") or {}).get("sum_pct_of_sales"), "orders_count": (r.get("orders") or {}).get("count"),
         "revision_pct": r.get("revision_pct"), "range_pos": r["range_pos"],
-        "ret_1m": r["ret_1m"], "ret_3m": r["ret_3m"],
+        "ret_1m": r["ret_1m"], "ret_3m": r["ret_3m"], "vol_annual": r.get("vol_annual"),
+        "below_ma200": r.get("below_ma200"),
         "dilution_pct": r.get("dilution_pct"),
         "debt_ratio": None if r["is_financial"] else r["debt_ratio"],
         "memo_text": ((r.get("sheet") or {}).get("risk") or "") + "\n" + ((r.get("sheet") or {}).get("note") or ""),
@@ -319,8 +352,8 @@ def main(argv=None) -> int:
     all_per = median([r["per"] for r in recs if r.get("per") and 0 < r["per"] < 200])
     all_pbr = median([r["pbr"] for r in recs if r.get("pbr") and 0 < r["pbr"] < 30])
     hist_dir = out_dir / "history"
-    snap = find_snapshot(load_history(hist_dir), today, cfg_sc["momentum"]["revision_lookback_days"])
-    order = cfg_sc["target"]["source_order"]
+    history = load_history(hist_dir)
+    snap = find_snapshot(history, today, cfg_sc["alpha"]["revision_lookback_days"])
 
     def score_all(rs):
         for r in rs:
@@ -337,16 +370,15 @@ def main(argv=None) -> int:
         else:
             bpbr, bpbr_src = all_pbr, "전체 종목 중앙값"
         r["bench"] = {"per": bper, "per_src": bper_src, "pbr": bpbr, "pbr_src": bpbr_src}
-        mt, mb = thesis.model_target(r, cfg_sc)
-        r["model_target"], r["model_basis"] = mt, mb
-        options = {"consensus": (r["target_cons"], "컨센서스"), "model": (mt, "모델 적정가"),
-                   "club": (r.get("target_club"), "모임")}
-        r["target"], r["target_source"] = None, None
-        for k in order:
-            v, lab = options.get(k, (None, None))
-            if v:
-                r["target"], r["target_source"] = v, lab
-                break
+        r["intrinsic"], r["intrinsic_basis"] = thesis.intrinsic_value(r, cfg_sc)
+        r["mos_pct"] = (r["intrinsic"] / r["price"] - 1) * 100 if (r["intrinsic"] and r["price"]) else None
+        r["intrinsic_outlier"] = False
+        if r["mos_pct"] is not None and r["mos_pct"] > cfg_sc["target"].get("intrinsic_outlier_pct", 300):
+            # 내재가치가 현재가의 4배 초과 → 이익 급변·일회성 가능성: 보수적으로 내재가치를 쓰지 않는다
+            r["intrinsic_outlier"], r["intrinsic"], r["mos_pct"] = True, None, None
+        r["target"], r["target_source"] = thesis.conservative_target(r, cfg_sc)
+        r["surprise_pct"], r["surprise_q"] = surprise(r["code"], r["quarters"], history)
+        r["orders"] = None
         est = r["est"]
         r["eps_growth_label"] = f"{today.year + 1}E EPS" if est.get("eps_g_next") is not None else f"{today.year}E EPS"
         r["turnaround"] = bool(est.get("turnaround_next") or (est.get("eps_g_next") is None and est.get("turnaround_cur")))
@@ -378,6 +410,10 @@ def main(argv=None) -> int:
                 fin = d.financials(corp, today)
                 dil = d.dilution(corp, today, cfg_sc["risk"]["cb_lookback_years"], cfg_sc["risk"]["rights_lookback_years"])
                 hold = d.major_holder(corp, today)
+                try:
+                    r["orders"] = d.orders(corp, today, cfg_sc["alpha"]["orders_months"])
+                except Exception as e:  # noqa: BLE001
+                    r["errors"].append(f"DART 수주 공시: {e}")
                 r["dart"].update(corp_code=corp, financials=fin, dilution=dil, holder=hold)
                 r["dilution_pct"] = dil.get("potential_pct")
                 if fin.get("debt_ratio") is not None:
@@ -400,19 +436,17 @@ def main(argv=None) -> int:
 
     idx = None
     try:
-        idx_daily = market.fetch_daily(sess, cfg_sc["cash"]["index_symbol"], 200)
+        idx_daily = market.fetch_daily(sess, cfg_sc["cash"]["index_symbol"], 300)
         idx = market.index_trend(idx_daily, cfg_sc["cash"]["ma_short"], cfg_sc["cash"]["ma_long"])
     except Exception as e:  # noqa: BLE001
         log.warning("코스피 지수 수집 실패: %s", e)
+    mac = macro.fetch_macro(sess)
+    mac_adj = macro.macro_adjust(mac, cfg_sc["cash"]["macro"])
     n_green = sum(1 for r in recs if r["score"]["grade"] == "green")
-    cash = strategy.cash_policy(idx, n_green, cfg_sc)
-    psize = cfg_sc["strategy"].get("portfolio_size", 15)
-    port = [r for r in recs if r["score"]["grade"] in ("green", "yellow")][:psize]
-    strategy.portfolio_weights(port, cash["cash_pct"], cfg_sc)
-    for r in recs:
-        r.setdefault("weight_pct", 0.0)
+    cash = strategy.cash_policy(idx, n_green, cfg_sc, mac_adj)
+    port = strategy.portfolio_weights(recs, cash["cash_pct"], cfg_sc)
     cash["effective_cash_pct"] = round(100 - sum(r["weight_pct"] for r in recs), 1)
-    cash["portfolio_size"] = psize
+    cash["portfolio_size"] = len(port["core"]) + len(port["satellite"])
 
     for r in recs:
         if r["price"] and r.get("_daily"):
@@ -420,7 +454,9 @@ def main(argv=None) -> int:
             r["plan"].update(strategy.exit_plan(r["price"], r["target"], cfg_sc))
         else:
             r["plan"] = None
-        r["thesis"] = thesis.build(r)
+        r["thesis"] = thesis.build(r, mac_adj[1])
+        r["process"] = thesis.process(r, cfg_sc)
+        r["sensitivity"] = thesis.sensitivity(r, cfg_sc)
 
     # 7) 저장 -------------------------------------------------------------
     sdir = out_dir / "stock"
@@ -449,7 +485,13 @@ def main(argv=None) -> int:
             "club_sector": r.get("club_sector"), "rank": r["rank"], "price": r["price"], "change_pct": r["change_pct"],
             "mcap_eok": r["mcap_eok"], "per": r["per"], "pbr": r["pbr"], "fwd_per": r["fwd_per"], "roe": r["roe"],
             "div_yield": r["div_yield"], "target": r["target"], "target_source": r["target_source"],
-            "weight_pct": r["weight_pct"], "summary": (r.get("summary") or [])[:2], "thesis": r["thesis"],
+            "weight_pct": r["weight_pct"], "bucket": r.get("bucket"), "summary": (r.get("summary") or [])[:2],
+            "thesis": r["thesis"], "mos_pct": r.get("mos_pct"), "intrinsic": r.get("intrinsic"),
+            "alpha": {"surprise": r.get("surprise_pct"), "surprise_q": r.get("surprise_q"), "q_op_yoy": r.get("q_op_yoy"),
+                      "last_q": r.get("last_q"), "orders": (r.get("orders") or {}).get("count"),
+                      "orders_pct": (r.get("orders") or {}).get("sum_pct_of_sales"), "revision": r.get("revision_pct"),
+                      "quality_ok": not sc.get("quality_fails"), "knife": sc.get("falling_knife"),
+                      "low_vol": (r.get("vol_annual") or 99) <= 30},
             "ret_3m": r["ret_3m"], "range_pos": r["range_pos"],
             "plan": ({"entry1": ent[0]["price"] if ent else None, "entry3": ent[-1]["price"] if ent else None,
                       "stop": pl.get("stop"), "tp1": pl.get("tp1"), "tp2": pl.get("tp2")} if pl else None),
@@ -463,7 +505,8 @@ def main(argv=None) -> int:
         "price_as_of": price_dates[-1] if price_dates else None,
         "universe": {"listed": len(listing), "analyzed": len(recs), "excluded": excluded, "filters": ucfg},
         "sheet": {"rows": sheet_stats["rows"], "club_stocks": len(club), "excluded": sheet_stats["foreign_or_no_ticker"]},
-        "dart_enabled": dart.enabled, "market": idx, "cash": cash,
+        "dart_enabled": dart.enabled, "market": idx, "cash": cash, "macro": mac,
+        "portfolio": port,
         "grade_counts": {g: sum(1 for r in recs if r["score"]["grade"] == g) for g in scoring.GRADES},
         "revision_snapshot_age_days": snap["_age"] if snap else None,
         "config": cfg_sc,
@@ -480,6 +523,8 @@ def main(argv=None) -> int:
 
     snap_today = {"date": today.strftime("%Y-%m-%d"),
                   "items": {r["code"]: {"eps": {y: v.get("eps") for y, v in r["annual"].items() if v.get("estimate")},
+                                        "q": {k: v.get("op_income") for k, v in (r.get("quarters") or {}).items()
+                                              if v.get("estimate") and v.get("op_income") is not None},
                                         "target_cons": r["target_cons"]} for r in recs}}
     (hist_dir / f"{snap_today['date']}.json").write_text(
         json.dumps(clean(snap_today), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

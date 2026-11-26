@@ -97,3 +97,66 @@ def fetch_finance(sess, code: str) -> tuple[dict, list[str]]:
     """연간 재무·컨센서스 + 기업 개요 문장."""
     js = get(sess, NAVER_ANNUAL.format(code=code)).json()
     return parse_naver_annual(js), parse_summary(js)
+
+
+# ------------------------------------------------------------------ 분기 실적·컨센서스
+NAVER_QUARTER = "https://m.stock.naver.com/api/stock/{code}/finance/quarter"
+
+
+def parse_naver_quarter(js: dict) -> dict:
+    """→ {'2026.09': {'estimate': False, 'revenue':..., 'op_income':..., 'eps':...}, '2026.12': {'estimate': True, ...}}
+    네이버 분기 표: 최근 5개 분기 확정치 + 다음 분기 컨센서스."""
+    info = js.get("financeInfo") or {}
+    out: dict[str, dict] = {}
+    rows = info.get("rowList") or []
+    for c in info.get("trTitleList") or []:
+        key = str(c.get("key") or "")
+        m = re.match(r"(20\d\d)(\d\d)", key)
+        if not m:
+            continue
+        q = f"{m.group(1)}.{m.group(2)}"
+        rec = {"estimate": str(c.get("isConsensus")).upper() == "Y"}
+        for std in ("revenue", "op_income", "net_income", "eps"):
+            for cand in ROW_KEYS[std]:
+                row = next((r for r in rows if _norm(r.get("title")) == cand), None)
+                if row is None:
+                    continue
+                cell = (row.get("columns") or {}).get(key) or {}
+                v = to_num(cell.get("value"))
+                if v is not None:
+                    rec[std] = v
+                    if cell.get("cx") not in (None, ""):
+                        rec.setdefault("_cx", {})[std] = cell.get("cx")
+                    break
+        out[q] = rec
+    return out
+
+
+def fetch_quarter(sess, code: str) -> dict:
+    return parse_naver_quarter(get(sess, NAVER_QUARTER.format(code=code)).json())
+
+
+def quarter_signals(quarters: dict) -> dict:
+    """최근 확정 분기의 영업이익 YoY·QoQ, 다음 분기 컨센서스."""
+    act = sorted(k for k, v in quarters.items() if not v.get("estimate"))
+    est = sorted(k for k, v in quarters.items() if v.get("estimate"))
+    out: dict = {"last_q": act[-1] if act else None, "next_q": est[0] if est else None}
+    if not act:
+        return out
+    last = quarters[act[-1]]
+    y, mth = act[-1].split(".")
+    yoy_key = f"{int(y) - 1}.{mth}"
+    prev_key = act[-2] if len(act) >= 2 else None
+
+    def g(a, b):
+        if a is None or b is None or b <= 0:
+            return None
+        return (a / b - 1) * 100
+    op = last.get("op_income")
+    out["last_op"] = op
+    out["op_yoy"] = g(op, (quarters.get(yoy_key) or {}).get("op_income"))
+    out["op_qoq"] = g(op, (quarters.get(prev_key) or {}).get("op_income") if prev_key else None)
+    out["op_turnaround"] = bool(op is not None and op > 0 and ((quarters.get(yoy_key) or {}).get("op_income") or 0) < 0)
+    if out["next_q"]:
+        out["next_op_est"] = quarters[out["next_q"]].get("op_income")
+    return out

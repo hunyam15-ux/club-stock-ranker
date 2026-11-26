@@ -32,7 +32,20 @@
   const gradeBadge = (s) => `<span class="g g-${s.score.grade}">${s.score.grade_emoji} ${esc(s.score.grade_label)}</span>`;
   const gradeShort = { green: "🟢 개꿀", yellow: "🟡 분할매수", white: "⚪ 관망", red: "🔴 비싸다" };
   const bar = (v) => `<span class="bar"><i style="width:${isNum(v) ? Math.max(0, Math.min(100, v)) : 0}%"></i></span>`;
-  const tlabel = (src) => ({ "컨센서스": "컨센서스 목표가", "모델 적정가": "모델 적정가", "모임": "모임 목표가" }[src] || "목표가");
+  const tlabel = (src) => ({ "컨센서스": "컨센서스 목표가", "보수적 목표가": "보수적 목표가", "내재가치": "내재가치", "모델 적정가": "모델 적정가", "모임": "모임 목표가" }[src] || "목표가");
+  const alphaChips = (s) => {
+    const a = s.alpha || {}, out = [];
+    out.push(a.quality_ok ? `<span class="ac ok">✓ 퀄리티 통과</span>` : `<span class="ac no">✕ 퀄리티 미달</span>`);
+    if (isNum(a.surprise)) out.push(`<span class="ac ${a.surprise >= 0 ? "ok" : "no"}">어닝 ${a.surprise >= 0 ? "서프라이즈" : "쇼크"} ${a.surprise > 0 ? "+" : ""}${a.surprise.toFixed(1)}%</span>`);
+    else if (isNum(a.q_op_yoy)) out.push(`<span class="ac ${a.q_op_yoy >= 0 ? "ok" : "no"}">${esc(a.last_q || "")} 영업익 YoY ${a.q_op_yoy > 0 ? "+" : ""}${a.q_op_yoy.toFixed(0)}%</span>`);
+    if (a.orders) out.push(`<span class="ac ok">수주 공시 ${a.orders}건${isNum(a.orders_pct) && a.orders_pct ? ` · 매출 ${a.orders_pct.toFixed(0)}%` : ""}</span>`);
+    if (isNum(a.revision)) out.push(`<span class="ac ${a.revision >= 0 ? "ok" : "no"}">컨센서스 ${a.revision >= 0 ? "↑" : "↓"} ${Math.abs(a.revision).toFixed(1)}%</span>`);
+    if (isNum(s.mos_pct)) out.push(`<span class="ac ${s.mos_pct >= 0 ? "ok" : "no"}">안전마진 ${s.mos_pct > 0 ? "+" : ""}${s.mos_pct.toFixed(0)}%</span>`);
+    if (a.low_vol) out.push(`<span class="ac ok">저변동성</span>`);
+    if (a.knife) out.push(`<span class="ac no">하락 추세</span>`);
+    if (s.bucket) out.push(`<span class="ac bk">${esc(s.bucket)} ${(s.weight_pct || 0).toFixed(1)}%</span>`);
+    return `<div class="achips">${out.join("")}</div>`;
+  };
   const li = (arr, empty) => (arr && arr.length ? `<ul class="blist">${arr.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="muted small">${empty}</p>`);
   const clubTag = (s) => (s.club ? `<span class="tag club">모임 발표</span>` : "");
 
@@ -75,7 +88,22 @@
         <div class="s">코스피·코스닥 ${n0(u.listed)}개 중 · ${esc(String(m.generated_at || "").replace(" KST", ""))} 갱신</div></div>
       <div><div class="k">등급 분포</div><div class="gcounts">
         ${["green", "yellow", "white", "red"].map((g) => `<span class="g g-${g}">${gradeShort[g]} ${gc[g] ?? 0}</span>`).join("")}</div></div>
-    </div>${warn}`;
+    </div>
+    <div class="macro">${macroHtml(m)}</div>${warn}`;
+  }
+
+  function macroHtml(m) {
+    const mc = m.macro || {}, c = m.cash || {}, mk = m.market || {};
+    const item = (k, lab) => {
+      const x = mc[k] || {};
+      if (!isNum(x.value)) return `<span class="mi"><span class="k">${lab}</span><b class="na">N/A</b></span>`;
+      const ch = isNum(x.chg_1m) ? `<span class="${x.chg_1m > 0 ? "up" : x.chg_1m < 0 ? "down" : ""}">${x.chg_1m > 0 ? "+" : ""}${x.chg_1m.toFixed(2)}%p</span>` : "";
+      return `<span class="mi"><span class="k">${lab}</span><b>${x.value.toFixed(2)}%</b> ${ch}</span>`;
+    };
+    const steps = (c.steps || []).map((s) => `${esc(s.label)} ${s.adj > 0 ? "+" : ""}${s.adj}`).join(" · ");
+    return `<div class="mrow2"><span class="mt">불안요소 체크</span>${item("hy_spread", "하이일드 스프레드")}${item("us10y", "미국 10년물")}${item("kr10y", "한국 10년물")}
+      <span class="mi"><span class="k">코스피 12개월</span><b>${isNum(mk.ret_12m) ? (mk.ret_12m > 0 ? "+" : "") + mk.ret_12m.toFixed(1) + "%" : "N/A"}</b></span></div>
+      <div class="tiny muted" style="margin-top:6px">현금 비중 계산: ${steps} → <b>${c.cash_pct}%</b> (실제 비중이 ±${c.rebalance_band_pct ?? 5}%p 벗어나면 리밸런싱)</div>`;
   }
 
   // ------------------------------------------------------------ TOP 픽 카드
@@ -89,6 +117,7 @@
       </header>
       <div class="pick-verdict">${gradeBadge(s)}<span class="score-big">${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}<small>점</small></span>
         <span class="tiny muted">${esc(sc.reason)}</span></div>
+      ${alphaChips(s)}
       <div class="boxes">
         <section class="box">
           <div class="box-t">🏢 어떤 회사?</div>
@@ -159,6 +188,7 @@
       <div class="sec-h"><h2>오늘의 TOP ${picks.length} 픽</h2><span class="muted small">점수 상위 🟢·🟡 종목 · 카드를 누르면 상세</span></div>
       <div class="picks">${picks.map(pickCard).join("") || '<p class="muted">현재 매수 등급 종목이 없습니다.</p>'}</div>
 
+      ${portfolioHtml()}
       <div class="sec-h" id="all"><h2>전체 순위</h2><span class="muted small" id="count"></span></div>
       <div class="filters">
         <input id="q" type="search" placeholder="종목명·코드·업종 검색" value="${esc(state.q)}">
@@ -172,8 +202,8 @@
         ${COLS.map(([k, l, a]) => `<th class="${a || ""}" data-k="${k}">${l} <span class="arr">${state.sort === k ? (state.dir > 0 ? "▲" : "▼") : ""}</span></th>`).join("")}
       </tr></thead><tbody id="tb"></tbody></table></div><div class="mlist" id="ml"></div></div>
       <div class="morebar"><button class="chip" id="showmore">50개 더 보기</button></div>
-      <p class="tiny muted">목표가 = 증권사 컨센서스 → 없으면 모델 적정가(업종 중앙 PER × 예상 EPS × ${DATA.meta.config.target.model_haircut}) → 모임 목표가 순.
-        업사이드 = (목표가 − 현재가) ÷ 현재가.</p>`;
+      <p class="tiny muted">목표가(보수적) = min(컨센서스 × ${DATA.meta.config.target.consensus_haircut}, 내재가치 = 예상 EPS × ${1 - DATA.meta.config.target.intrinsic_eps_haircut} × 업종 중앙 PER).
+        업사이드 = (목표가 − 현재가) ÷ 현재가. 자세한 기준은 '매매 원칙' 탭.</p>`;
     $app.querySelectorAll(".pick").forEach((el) => el.addEventListener("click", (e) => {
       if (e.target.closest("a")) return;
       location.hash = `#/stock/${el.dataset.code}`;
@@ -208,6 +238,21 @@
       const tr = e.target.closest("tr[data-code]"); if (tr) location.hash = `#/stock/${tr.dataset.code}`;
     });
     if (state.jumpAll) { state.jumpAll = false; document.getElementById("all").scrollIntoView(); }
+  }
+
+  function portfolioHtml() {
+    const P = DATA.stocks.filter((s) => s.weight_pct > 0);
+    if (!P.length) return "";
+    const c = DATA.meta.cash || {};
+    const grp = (b) => P.filter((s) => s.bucket === b);
+    const sum = (L) => L.reduce((a, s) => a + s.weight_pct, 0);
+    const tbl = (L) => L.map((s) => `<a class="prow" href="#/stock/${esc(s.code)}"><span><b>${esc(s.name)}</b> <span class="tiny muted">${esc(s.sector)}</span></span>
+      <span class="tiny">${gradeShort[s.score.grade]}</span><span class="pw"><i style="width:${Math.min(100, s.weight_pct / 12 * 100)}%"></i></span><b class="num">${s.weight_pct.toFixed(1)}%</b></a>`).join("");
+    return `<div class="sec-h"><h2>권장 포트폴리오</h2><span class="muted small">코어 & 새틀라이트 · 가치 가중 · 현금 ${c.cash_pct}%</span></div>
+      <div class="grid2 port">
+        <div class="card sec"><h2>🛡️ 코어 <span class="muted">시총 1조↑ · 퀄리티 통과 · ${sum(grp("코어")).toFixed(0)}%</span></h2>${tbl(grp("코어")) || '<p class="muted small">해당 없음</p>'}</div>
+        <div class="card sec"><h2>🚀 새틀라이트 <span class="muted">중소형 알파 · ${sum(grp("새틀라이트")).toFixed(0)}%</span></h2>${tbl(grp("새틀라이트")) || '<p class="muted small">해당 없음</p>'}</div>
+      </div>`;
   }
 
   function rowHtml(s) {
@@ -266,7 +311,10 @@
           <div class="dprice"><div class="p">${won(s.price)}</div>
             <div>${sgn(s.change_pct, 2)} <span class="tiny muted">${esc(String(s.price_time || "").replace("T", " ").slice(0, 16))}</span></div></div>
         </div>
-        <div class="verdict">${gradeBadge(s)}<span class="tot">${isNum(sc.total) ? sc.total.toFixed(1) : "N/A"}점</span><span class="why">${esc(sc.reason)}</span></div>
+        <div class="verdict">${gradeBadge(s)}<span class="tot">${isNum(sc.total) ? sc.total.toFixed(1) : "N/A"}점</span>${(sc.flags || []).map((f) => `<span class="ac no">${esc(f)}</span>`).join("")}<span class="why">${esc(sc.reason)}</span></div>
+      </div>
+      <div class="card sec" style="margin-top:12px"><h2>🧭 종목 선정 프로세스</h2>
+        <div class="proc">${(s.process || []).map((p) => `<div class="pstep ${p.ok ? "ok" : "no"}"><div class="pn">${p.ok ? "✓" : "✕"} ${esc(p.name)}</div><div class="tiny">${esc(p.note || "")}</div></div>`).join("")}</div>
       </div>
 
       <div class="boxes big">
@@ -279,10 +327,12 @@
           <div class="tp"><div><span class="k">${esc(tlabel(s.target_source))}</span><b>${won(s.target)}</b><span>${sgn(sc.upside_pct, 1)}</span></div></div>
           ${li(t.target_basis, "목표가 산출 불가")}</section>
         <section class="box"><div class="box-t">🔍 체크포인트 <span class="muted tiny">주가희석요소 · 경영진</span></div>${li(t.checks, "")}
+          ${s.orders?.items?.length ? `<div class="memo-t" style="margin-top:10px">최근 수주 공시 (단일판매·공급계약)</div><table class="mini"><thead><tr><th>공시일</th><th>매출 대비</th><th>계약금액</th></tr></thead><tbody>
+            ${s.orders.items.map((o) => `<tr><td><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${esc(o.rcept_no)}" target="_blank" rel="noopener">${esc(o.date)}</a></td><td>${p1(o.pct_of_sales)}</td><td>${isNum(o.amount_won) ? eok(o.amount_won / 1e8) : NA}</td></tr>`).join("")}</tbody></table>` : ""}
           ${dil?.events?.length ? `<table class="mini" style="margin-top:8px"><thead><tr><th>공시일</th><th>종류</th><th>주식총수 대비</th></tr></thead><tbody>
             ${dil.events.slice(0, 6).map((e) => `<tr><td><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${esc(e.rcept_no)}" target="_blank" rel="noopener">${esc(e.date)}</a></td><td>${esc(e.type)}</td><td>${p1(e.pct_of_shares)}</td></tr>`).join("")}</tbody></table>` : ""}</section>
         <section class="box"><div class="box-t">📊 점수 구성 <span class="muted tiny">충족률 ${(sc.coverage * 100).toFixed(0)}%</span></div>
-          ${comp("upside", "업사이드")}${comp("valuation", "밸류에이션")}${comp("momentum", "실적 모멘텀")}${comp("price_position", "가격 위치")}
+          ${comp("upside", "업사이드")}${comp("value", "가치")}${comp("growth", "성장")}${comp("alpha", "알파")}${comp("price_risk", "가격·위험")}
           <div class="comp"><span>리스크 감점</span><span class="tiny muted">희석 ${pd.dilution ?? "N/A"} · 부채 ${pd.debt ?? "N/A"} · 메모 ${pd.memo ?? 0}</span><b class="num down">−${sc.penalty}</b></div></section>
       </div>
 
@@ -299,7 +349,7 @@
           <div><div class="k">변동성(60일)</div><div class="v">${p1(s.vol_annual)}</div></div>
           <div><div class="k">컨센서스 변화</div><div class="v">${sgn(s.revision_pct)}</div><div class="x">${esc(s.revision_basis || "과거 스냅샷 누적 중")}</div></div>
           <div><div class="k">최대주주 지분</div><div class="v">${p1(dart.holder?.pct)}</div><div class="x">${esc(dart.holder?.basis || (dart.enabled ? "상위 종목만 조회" : ""))}</div></div>
-          <div><div class="k">컨센서스 목표가</div><div class="v">${won(s.target_cons)}</div><div class="x">${esc(s.cons_date || "커버리지 없음")}</div></div>
+          <div><div class="k">컨센서스 목표가</div><div class="v">${won(s.target_cons)}</div><div class="x">${s.target_cons ? esc(s.cons_date || "") : "커버리지 없음"}</div></div>
         </div>
       </div>
 
@@ -309,6 +359,8 @@
           <span><i style="border-color:#8fb8ff;border-top-style:dashed"></i>손절가</span><span><i style="border-color:#6b7280;border-top-style:dotted"></i>52주 고·저</span></div>
       </div>
 
+      ${sensHtml(s)}
+      ${quarterHtml(s)}
       <div class="card sec" style="margin-top:12px"><h2>실적 · 컨센서스 <span class="muted">억원, EPS 원 · 네이버 증권</span></h2>
         <table class="mini"><thead><tr><th></th><th>${yr - 1} ${tag(est.prev)}</th><th>${yr} ${tag(est.cur)}</th><th>성장률</th><th>${yr + 1} ${tag(est.next)}</th><th>성장률</th></tr></thead>
           <tbody>${yrow("매출액", "revenue")}${yrow("영업이익", "op_income")}${yrow("EPS", "eps", "won")}</tbody></table>
@@ -332,6 +384,31 @@
       ${s.errors?.length ? `<p class="errs">수집 실패 항목: ${esc(s.errors.join(" / "))}</p>` : ""}`;
     if (s.chart) drawChart(document.getElementById("chart"), s.chart, s);
     else document.getElementById("chart").innerHTML = `<p class="muted small">차트 데이터 N/A</p>`;
+  }
+
+  function sensHtml(s) {
+    const t = s.sensitivity;
+    if (!t) return "";
+    const cell = (u) => {
+      const a = Math.min(1, Math.abs(u) / 80);
+      const bg = u >= 0 ? `rgba(240,68,82,${0.1 + a * 0.45})` : `rgba(49,130,246,${0.1 + a * 0.45})`;
+      return `style="background:${bg}"`;
+    };
+    return `<div class="card sec" style="margin-top:12px"><h2>📐 밸류에이션 민감도 <span class="muted">목표가 = ${esc(t.basis || "예상")} EPS × (1 − 감익) × PER · 현재가 ${won(t.price)}</span></h2>
+      <table class="mini sens"><thead><tr><th>EPS 감익 \\ PER</th>${t.pers.map((p) => `<th>${p.toFixed(1)}배</th>`).join("")}</tr></thead><tbody>
+      ${t.rows.map((r) => `<tr><td>${r.eps_cut}%</td>${r.values.map((v, i) => `<td ${cell(r.upside[i])}>${n0(v)}<div class="tiny">${r.upside[i] > 0 ? "+" : ""}${r.upside[i].toFixed(0)}%</div></td>`).join("")}</tr>`).join("")}
+      </tbody></table><p class="tiny muted" style="margin:8px 0 0">PER 열은 업종 중앙 PER의 ${DATA.meta.config.target.sensitivity_per_mults.map((m) => m + "배").join("·")} · 빨강=현재가 대비 상승, 파랑=하락</p></div>`;
+  }
+
+  function quarterHtml(s) {
+    const Q = s.quarters || {};
+    const ks = Object.keys(Q).sort();
+    if (!ks.length) return "";
+    return `<div class="card sec" style="margin-top:12px"><h2>분기 실적 <span class="muted">억원 · E=컨센서스${isNum(s.surprise_pct) ? ` · ${esc(s.surprise_q)} 서프라이즈 ${s.surprise_pct > 0 ? "+" : ""}${s.surprise_pct.toFixed(1)}%` : " · 서프라이즈는 발표 전 컨센서스가 저장된 분기부터 계산"}</span></h2>
+      <table class="mini"><thead><tr><th></th>${ks.map((k) => `<th>${esc(k)}${Q[k].estimate ? ' <span class="pill">E</span>' : ""}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>매출액</td>${ks.map((k) => `<td>${eok(Q[k].revenue)}</td>`).join("")}</tr>
+      <tr><td>영업이익</td>${ks.map((k) => `<td>${eok(Q[k].op_income)}</td>`).join("")}</tr></tbody></table>
+      <p class="tiny muted" style="margin:8px 0 0">최근 분기 영업이익 YoY ${sgn(s.q_op_yoy, 0)} · QoQ ${sgn(s.q_op_qoq, 0)}</p></div>`;
   }
 
   function planHtml(s, pl) {
@@ -454,44 +531,44 @@
 
   // ------------------------------------------------------------ 매매 원칙
   function renderRules() {
-    const C = DATA.meta.config, st = C.strategy, cs = C.cash, gr = C.grades, w = C.weights, rk = C.risk, tg = C.target, u = DATA.meta.universe || {};
-    const f = u.filters || {};
+    const C = DATA.meta.config, st = C.strategy, cs = C.cash, gr = C.grades, w = C.weights, rk = C.risk, tg = C.target, q = C.quality, al = C.alpha;
+    const u = DATA.meta.universe || {}, f = u.filters || {}, csat = st.core_satellite;
     const steps = st.entry_steps_pct.map((p, i) => `${i + 1}차 ${p === 0 ? "현재가" : `현재가 ${p}%`} (${Math.round(st.entry_split[i] * 100)}%)`).join(" → ");
-    $app.innerHTML = `<div class="rules"><h1 class="page" style="margin-bottom:12px">매매 원칙</h1>
-      <div class="card"><h2>0. 분석 방식 — 모임 시트의 틀을 전 종목에</h2><ul>
-        <li>대상: 코스피·코스닥 ${n0(u.listed)}개 중 <b>시총 ${n0(f.min_mcap_eok)}억↑, 거래대금 ${n0((f.min_trade_value_mil || 0) / 100)}억↑ 보통주</b> ${n0(u.analyzed)}개 (+모임 발표 종목은 항상 포함)</li>
-        <li><b>투자아이디어</b>(왜 사야 하나)·<b>Risk</b>·<b>목표가 근거</b>·<b>비고(희석요소·경영진 Check)</b>를 종목마다 데이터로 자동 작성</li>
-        <li>목표가: 증권사 컨센서스 → 없으면 모델 적정가(업종 중앙 PER × 예상 EPS × ${tg.model_haircut}, 현재가 +${tg.model_max_upside_pct}% 상한) → 모임 목표가</li>
-        <li>DART(희석·부채·대주주)는 1차 점수 상위 ${rk.dart_top_n}종목과 모임 종목만 조회</li></ul></div>
-      <div class="card"><h2>1. 등급과 행동</h2>
-        <table class="mini"><thead><tr><th>등급</th><th>총점</th><th style="text-align:left">행동</th></tr></thead><tbody>
-          <tr><td>${gradeShort.green}</td><td>${gr.green}점 이상</td><td style="text-align:left">계획한 분할매수 실행</td></tr>
-          <tr><td>${gradeShort.yellow}</td><td>${gr.yellow}~${gr.green}점</td><td style="text-align:left">비중 절반(×${st.grade_multiplier.yellow})으로 천천히</td></tr>
-          <tr><td>${gradeShort.white}</td><td>${gr.white}~${gr.yellow}점</td><td style="text-align:left">신규 매수 보류</td></tr>
-          <tr><td>${gradeShort.red}</td><td>${gr.white}점 미만</td><td style="text-align:left">매수 금지${gr.red_if_negative_upside ? " · 현재가 ≥ 목표가여도 🔴" : ""}</td></tr></tbody></table>
-        <p class="small">총점 = 업사이드 ${w.upside} · 밸류에이션 ${w.valuation} · 실적 모멘텀 ${w.momentum} · 가격 위치 ${w.price_position} 가중평균 − 리스크 감점(최대 ${rk.max_total}점). 충족률 ${Math.round(gr.min_coverage * 100)}% 미만이면 최고 ⚪.</p></div>
-      <div class="card"><h2>2. 진입 — 3회 분할매수</h2><ul><li>${steps}</li>
-        <li>2·3차 가격 ±${st.support_snap_pct}% 안에 최근 ${st.support_lookbacks.join("·")}일 저점(지지선)이 있으면 지지선 바로 위로 조정</li></ul></div>
-      <div class="card"><h2>3. 비중</h2><ul>
-        <li>순위 상위 <b>${st.portfolio_size}종목</b>(🟢·🟡)에만 배분: 등급 배수 × 총점 ÷ 60일 변동성</li>
-        <li><b>한 종목 최대 ${st.max_weight_pct}%</b></li></ul></div>
-      <div class="card"><h2>4. 손절</h2><ul>
-        <li>평균 진입가 대비 <b>${st.stop_loss_pct}%</b> 또는 주요 지지선 ${st.stop_below_support_pct}% 이탈 중 <b>먼저 닿는 가격</b></li>
-        <li>투자 논리 훼손(실적 쇼크, 대규모 희석, 경영진 이슈) 시 즉시 정리</li></ul></div>
-      <div class="card"><h2>5. 익절</h2><ul>
-        <li>1차: 목표가까지 상승여력의 <b>${Math.round(st.take_profit_1_progress * 100)}%</b> 도달 → 보유분 <b>${Math.round(st.take_profit_1_fraction * 100)}%</b> 매도</li>
-        <li>2차: <b>목표가 도달</b> → 잔량 대부분 매도</li>
-        <li>추적 손절: 1차 익절 이후 최고가 대비 <b>${st.trailing_stop_pct}%</b></li></ul></div>
-      <div class="card"><h2>6. 현금 관리</h2>
-        <table class="mini"><thead><tr><th>코스피 추세</th><th>기본 현금</th></tr></thead><tbody>
-          <tr><td>${cs.ma_short}·${cs.ma_long}일선 모두 위</td><td>${cs.base_pct.above_both}%</td></tr>
-          <tr><td>혼조</td><td>${cs.base_pct.mixed}%</td></tr><tr><td>모두 아래</td><td>${cs.base_pct.below_both}%</td></tr></tbody></table>
-        <p class="small">🟢 종목 수에 따라 가감: ${cs.green_adjust.map((r) => `${r.min_green}개↑ ${r.adj >= 0 ? "+" : ""}${r.adj}%p`).join(" · ")} (범위 ${cs.min_pct}~${cs.max_pct}%)</p>
-        <p class="small">현재 <b>${DATA.meta.cash.cash_pct}%</b> — ${esc(DATA.meta.cash.trend_desc)}, 🟢 ${DATA.meta.cash.n_green}종목</p></div>
-      <div class="card"><h2>7. 점검 습관</h2><ul>
-        <li>매수 전 <b>체크포인트(희석·경영진)</b>와 DART 공시를 직접 확인</li>
-        <li>모델 적정가 종목은 증권사 커버리지가 없는 종목 — 사업 내용을 먼저 공부</li>
-        <li>이 점수는 기계적 참고 지표입니다. 최종 판단은 각자 합니다.</li></ul></div>
+    $app.innerHTML = `<div class="rules"><h1 class="page" style="margin-bottom:12px">투자 전략 · 매매 원칙</h1>
+      <div class="card"><h2>🧭 종목 선정 프로세스</h2><ol class="olist">
+        <li><b>유니버스</b> — 코스피·코스닥 ${n0(u.listed)}개 중 시총 ${n0(f.min_mcap_eok)}억↑ · 거래대금 ${n0((f.min_trade_value_mil || 0) / 100)}억↑ 보통주 ${n0(u.analyzed)}개 (+모임 발표 종목)</li>
+        <li><b>퀄리티 게이트</b>(가치 함정 회피) — 적자, ROE &lt; ${q.min_roe}%, 부채비율 &gt; ${q.max_debt_ratio}%(금융 제외), 잠재 희석 ≥ ${q.max_dilution_pct}%, 데이터 충족률 &lt; ${Math.round(gr.min_coverage * 100)}% 중 하나라도 해당하면 <b>최고 ⚪</b></li>
+        <li><b>가치</b> — 보수적 내재가치(예상 EPS × (1−${tg.intrinsic_eps_haircut * 100}%) × 업종 중앙 PER) 대비 <b>안전마진</b>, 업종 대비 PER·PBR, Forward PER</li>
+        <li><b>알파</b> — ① 실적 서프라이즈(분기 영업이익 vs 발표 직전 컨센서스) ② 신규 수주(최근 ${al.orders_months}개월 단일판매·공급계약 공시, 매출 대비 %) ③ 컨센서스 EPS 상향</li>
+        <li><b>성장</b> — 예상 EPS·영업이익 성장률 (PER이 높더라도 이익 성장이 나오는 종목)</li>
+        <li><b>가격·위험</b> — 52주 위치, 3개월 수익률, <b>저변동성</b>. 3개월 ${C.falling_knife.ret_3m_pct}% 이하 + 200일선 아래 + 컨센서스 상향 없음 = <b>떨어지는 칼날 → 최고 🟡</b></li>
+        <li><b>리스크 감점</b> — 희석·부채·모임 메모 키워드 (최대 ${rk.max_total}점)</li>
+        <li><b>등급 정원</b> — 🟢 ${gr.max_green}개, 🟡 ${gr.max_yellow}개까지만</li></ol></div>
+      <div class="card"><h2>🎯 보수적 목표가</h2><ul>
+        <li>목표가 = <b>min(컨센서스 × ${tg.consensus_haircut}, 보수적 내재가치)</b> — 증권사 낙관 편향과 이익 추정 오차를 모두 할인</li>
+        <li>컨센서스가 없으면 내재가치만 사용(현재가 +${tg.model_max_upside_pct}% 상한)</li>
+        <li>업사이드 0% 이하 → 🔴, +${C.upside.best_pct}% 이상이어야 만점 · 데이터가 없는 항목은 ${C.missing_component_score}점(보수적)으로 계산</li>
+        <li>종목 상세의 <b>밸류에이션 민감도</b> 표: EPS ${tg.sensitivity_eps_cuts.join("·")}% × PER(업종의 ${tg.sensitivity_per_mults.join("·")}배)</li></ul></div>
+      <div class="card"><h2>📚 전략적 가치투자에서 가져온 전략</h2><ul>
+        <li><b>가치투자</b> — 내재가치보다 싸면 사고 비싸면 판다: 안전마진·업종 대비 할인이 점수의 중심(가치 ${w.value} + 업사이드 ${w.upside})</li>
+        <li><b>저변동성</b> — 같은 조건이면 변동성이 낮은 종목을 우대(가격·위험 항목의 ${Math.round(C.price_risk.sub_weights.low_volatility * 100)}%)</li>
+        <li><b>성장투자</b> — 이익이 늘어나는 기업(성장 ${w.growth})과 실적·수주 알파(${w.alpha})</li>
+        <li><b>가치 가중</b> — 비중 ∝ 총점 × (1 + 안전마진) ÷ 변동성, 한 종목 최대 ${st.max_weight_pct}%</li>
+        <li><b>코어 & 새틀라이트</b> — 주식 몫의 ${Math.round(csat.core_ratio * 100)}%는 코어(시총 ${n0(csat.core_min_mcap_eok / 10000)}조↑·퀄리티 통과 상위 ${csat.core_size}), ${Math.round((1 - csat.core_ratio) * 100)}%는 새틀라이트(상위 ${csat.satellite_size})</li>
+        <li><b>정률투자</b> — 기본 주식 ${100 - cs.base_pct} : 현금 ${cs.base_pct}, 권장 비중에서 ±${cs.rebalance_band_pct}%p 벗어나면 리밸런싱</li>
+        <li><b>절대모멘텀</b> — 코스피 12개월 수익률이 마이너스면 현금 +${cs.abs_momentum_adj}%p</li></ul></div>
+      <div class="card"><h2>⚠️ 불안요소(매크로) 체크</h2><ul>
+        <li>하이일드 스프레드 ≥ ${cs.macro.hy_spread_high}% → 현금 +${cs.macro.hy_spread_high_adj}%p, 1개월 +${cs.macro.hy_spread_jump}%p 이상 확대 → +${cs.macro.hy_spread_jump_adj}%p</li>
+        <li>미국 10년물 ≥ ${cs.macro.us10y_high}% → +${cs.macro.us10y_high_adj}%p (높은 할인율은 성장 기대의 주가 반영을 제약)</li>
+        <li>코스피 ${cs.ma_short}·${cs.ma_long}일선: 모두 위 ${cs.trend_adj.above_both}%p / 혼조 ${cs.trend_adj.mixed}%p / 모두 아래 +${cs.trend_adj.below_both}%p</li>
+        <li>직접 확인: 자회사 IPO·블록딜 오버행, 레버리지 ETF 쏠림·개인 본전 심리, 장비사·IDM 컨퍼런스콜(CAPEX)</li>
+        <li>현재 권장 현금 <b>${DATA.meta.cash.cash_pct}%</b> — ${(DATA.meta.cash.steps || []).map((x) => esc(x.label) + " " + (x.adj > 0 ? "+" : "") + x.adj).join(" · ")}</li></ul></div>
+      <div class="card"><h2>📈 매매 원칙</h2><ul>
+        <li>진입: ${steps} (내려갈수록 많이) · 2·3차는 ±${st.support_snap_pct}% 안의 ${st.support_lookbacks.join("·")}일 저점(지지선)에 맞춤</li>
+        <li>손절: 평균 진입가 ${st.stop_loss_pct}% 또는 지지선 ${st.stop_below_support_pct}% 이탈 중 먼저 닿는 가격 · 투자 논리 훼손 시 즉시</li>
+        <li>익절: 목표가까지 상승여력의 ${Math.round(st.take_profit_1_progress * 100)}% → ${Math.round(st.take_profit_1_fraction * 100)}% 매도, 목표가 도달 → 잔량 대부분, 이후 고점 대비 ${st.trailing_stop_pct}% 추적 손절</li>
+        <li>등급: 🟢 ${gr.green}점↑ 분할매수 실행 · 🟡 ${gr.yellow}점↑ 절반 비중 · ⚪ ${gr.white}점↑ 보류 · 🔴 매수 금지</li>
+        <li>점수는 기계적 참고 지표입니다. 최종 판단과 책임은 각자에게 있습니다.</li></ul></div>
     </div>`;
   }
 

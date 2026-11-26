@@ -52,65 +52,86 @@ def exit_plan(price: float, target: float | None, cfg: dict) -> dict:
             "trailing_pct": sc["trailing_stop_pct"], "note": None}
 
 
-def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> None:
-    """총점·변동성 반영 권장 비중. stocks 각 항목에 'weight_pct' 를 채운다."""
+def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
+    """코어&새틀라이트 + 가치 가중.
+    - 코어: 시총 기준 이상 · 퀄리티 통과 🟢/🟡 상위 core_size 종목 → 주식 몫 × core_ratio
+    - 새틀라이트: 나머지 🟢/🟡 상위 satellite_size 종목 → 주식 몫 × (1−core_ratio)
+    - 각 바구니 안에서 비중 ∝ 등급배수 × 총점 × (1+안전마진) ÷ 변동성, 한 종목 상한 max_weight_pct
+    stocks 는 순위순. 각 종목에 weight_pct, bucket 을 채운다."""
     sc = cfg["strategy"]
+    cs = sc["core_satellite"]
     mult = sc["grade_multiplier"]
     cap = sc["max_weight_pct"]
-    raw = {}
-    for s in stocks:
-        m = mult.get(s["score"]["grade"], 0)
-        tot = s["score"]["total"]
-        vol = s.get("vol_annual") or 40.0  # 변동성 결측 시 보수적으로 40% 가정
-        if m > 0 and tot:
-            raw[s["code"]] = m * tot / clamp(vol, 15, 120)
+    elig = [s for s in stocks if s["score"]["grade"] in ("green", "yellow") and s["score"]["total"]]
+    core = [s for s in elig if (s.get("mcap_eok") or 0) >= cs["core_min_mcap_eok"] and not s["score"]["quality_fails"]][: cs["core_size"]]
+    core_codes = {s["code"] for s in core}
+    sat = [s for s in elig if s["code"] not in core_codes][: cs["satellite_size"]]
     investable = 100 - cash_pct
-    weights = {k: 0.0 for k in raw}
-    remaining = dict(raw)
-    budget = investable
-    # 상한 초과분을 나머지 종목에 재분배(반복)
-    for _ in range(20):
-        tot_raw = sum(remaining.values())
-        if not remaining or tot_raw <= 0 or budget <= 1e-9:
-            break
-        capped = False
-        for k, v in list(remaining.items()):
-            w = budget * v / tot_raw
-            if weights[k] + w > cap:
-                capped = True
-        if not capped:
-            for k, v in remaining.items():
-                weights[k] += budget * v / tot_raw
-            budget = 0
-            break
-        for k, v in list(remaining.items()):
-            w = budget * v / tot_raw
-            if weights[k] + w > cap:
-                budget -= cap - weights[k]
-                weights[k] = cap
-                del remaining[k]
+    budgets = {"코어": investable * cs["core_ratio"], "새틀라이트": investable * (1 - cs["core_ratio"])}
+    if not core:
+        budgets = {"코어": 0, "새틀라이트": investable}
+    if not sat:
+        budgets["코어"] += budgets["새틀라이트"]
+        budgets["새틀라이트"] = 0
     for s in stocks:
-        s["weight_pct"] = round(weights.get(s["code"], 0.0), 1)
-    return None
+        s["weight_pct"], s["bucket"] = 0.0, None
+
+    def raw(s):
+        vol = s.get("vol_annual") or 40.0
+        mos = s.get("mos_pct")
+        vw = (1 + clamp(mos or 0, -50, 100) / 100) if sc.get("value_weighting") else 1
+        return mult.get(s["score"]["grade"], 0) * s["score"]["total"] * vw / clamp(vol, 15, 120)
+
+    for name, bucket in (("코어", core), ("새틀라이트", sat)):
+        w = _alloc({s["code"]: raw(s) for s in bucket}, budgets[name], cap)
+        for s in bucket:
+            s["weight_pct"], s["bucket"] = round(w.get(s["code"], 0.0), 1), name
+    return {"core": [s["code"] for s in core], "satellite": [s["code"] for s in sat], "budgets": budgets}
 
 
-def cash_policy(index: dict | None, n_green: int, cfg: dict) -> dict:
+def _alloc(raw: dict, budget: float, cap: float) -> dict:
+    weights = {k: 0.0 for k in raw}
+    remaining = {k: v for k, v in raw.items() if v > 0}
+    for _ in range(30):
+        tot = sum(remaining.values())
+        if not remaining or tot <= 0 or budget <= 1e-9:
+            break
+        over = [k for k, v in remaining.items() if weights[k] + budget * v / tot > cap]
+        if not over:
+            for k, v in remaining.items():
+                weights[k] += budget * v / tot
+            break
+        for k in over:
+            budget -= cap - weights[k]
+            weights[k] = cap
+            del remaining[k]
+    return weights
+
+
+def cash_policy(index: dict | None, n_green: int, cfg: dict, macro_adj: tuple[int, list[str]] | None = None) -> dict:
+    """정률투자(기본 현금) + 코스피 추세 + 절대모멘텀 + 🟢 개수 + 매크로 불안요소."""
     c = cfg["cash"]
-    if not index or index.get("ma_short") is None or index.get("ma_long") is None:
-        state, base = "unknown", c["base_pct"]["mixed"]
-        desc = "코스피 추세 데이터 없음 → 중립 가정"
-    else:
+    steps = [("정률 기본", c["base_pct"])]
+    state, desc = "unknown", "코스피 추세 데이터 없음"
+    if index and index.get("ma_short") is not None and index.get("ma_long") is not None:
         a, b = index["last"] > index["ma_short"], index["last"] > index["ma_long"]
         state = "above_both" if a and b else "below_both" if not a and not b else "mixed"
-        base = c["base_pct"][state]
         desc = {"above_both": f"코스피 {c['ma_short']}·{c['ma_long']}일선 위(상승 추세)",
                 "mixed": f"코스피 {c['ma_short']}·{c['ma_long']}일선 혼조",
                 "below_both": f"코스피 {c['ma_short']}·{c['ma_long']}일선 아래(하락 추세)"}[state]
-    adj = 0
+        steps.append((desc, c["trend_adj"][state]))
+    r12 = (index or {}).get("ret_12m")
+    if r12 is not None and r12 < 0:
+        steps.append((f"절대모멘텀: 코스피 12개월 {r12:+.1f}% < 0", c["abs_momentum_adj"]))
     for rule in c["green_adjust"]:
         if n_green >= rule["min_green"]:
-            adj = rule["adj"]
+            steps.append((f"🟢 {n_green}종목", rule["adj"]))
             break
-    pct = clamp(base + adj, c["min_pct"], c["max_pct"])
-    return {"cash_pct": pct, "trend_state": state, "trend_desc": desc, "base": base, "green_adj": adj,
-            "n_green": n_green}
+    if macro_adj:
+        adj, why = macro_adj
+        for w in why:
+            steps.append((w.split(" (+")[0], int(w.split("(+")[1].split("%")[0]) if "(+" in w else 0))
+    total = sum(v for _, v in steps)
+    pct = clamp(total, c["min_pct"], c["max_pct"])
+    return {"cash_pct": pct, "trend_state": state, "trend_desc": desc, "n_green": n_green,
+            "steps": [{"label": l, "adj": v} for l, v in steps], "rebalance_band_pct": c.get("rebalance_band_pct")}

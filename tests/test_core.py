@@ -86,35 +86,57 @@ def test_naver_annual():
 
 
 # ------------------------------------------------------------- 점수
-BASE = dict(price=10000, target=14000, target_source="모임", per=8, pbr=0.8, fwd_per=6, bench_per=12,
-            bench_pbr=1.2, eps_growth_next=25, turnaround=False, revision_pct=None, range_pos=0.25,
-            ret_1m=-5, ret_3m=-10, dilution_pct=0, debt_ratio=60, memo_text="")
+BASE = dict(price=10000, target=14000, target_source="보수적 목표가", per=8, pbr=0.8, fwd_per=6, bench_per=12,
+            bench_pbr=1.2, mos_pct=40, eps_growth=25, op_growth=30, turnaround=False, roe=14, op_income_last=500,
+            surprise_pct=8, q_op_yoy=40, orders_pct=20, orders_count=2, revision_pct=3, range_pos=0.25,
+            ret_1m=-5, ret_3m=-10, vol_annual=30, below_ma200=False, dilution_pct=0, debt_ratio=60, memo_text="")
 
 
 def test_score_good_stock_is_green():
     r = scoring.score_stock(BASE, CFG)
-    assert r["grade"] == "green", r
-    assert "모임 목표가 대비 +40%" in r["reason"]
-    assert r["coverage"] == 1.0
+    assert r["grade"] == "green", (r["total"], r["reason"])
+    assert "보수적 목표가 대비 +40%" in r["reason"] or "안전마진" in r["reason"]
+    assert r["coverage"] == 1.0 and not r["quality_fails"]
 
 
 def test_negative_upside_is_red():
     r = scoring.score_stock({**BASE, "target": 9000}, CFG)
-    assert r["grade"] == "red" and "목표가 대비 -10%" in r["reason"] and "현재가 ≥ 목표가" in r["flags"]
+    assert r["grade"] == "red" and "현재가 ≥ 보수적 목표가" in r["flags"]
 
 
-def test_missing_data_reweights_and_caps_grade():
-    s = {k: None for k in BASE}
-    s.update(price=10000, range_pos=0.1, ret_1m=-8, ret_3m=-15)
+def test_quality_gate_caps_grade():
+    r = scoring.score_stock({**BASE, "per": -3, "roe": 2}, CFG)
+    assert r["grade"] in ("white", "red") and any("적자" in f for f in r["quality_fails"])
+
+
+def test_falling_knife_caps_yellow():
+    r = scoring.score_stock({**BASE, "ret_3m": -40, "below_ma200": True, "revision_pct": None}, CFG)
+    assert r["falling_knife"] and r["grade"] in ("yellow", "white", "red")
+
+
+def test_missing_data_is_conservative():
+    full = scoring.score_stock(BASE, CFG)["total"]
+    s = {**BASE, "surprise_pct": None, "q_op_yoy": None, "orders_count": 0, "revision_pct": None}
     r = scoring.score_stock(s, CFG)
-    assert r["coverage"] < 0.6 and r["grade"] in ("white", "red")
+    assert r["components"]["alpha"]["missing"] and r["total"] < full
 
 
 def test_risk_penalty():
     r0 = scoring.score_stock(BASE, CFG)
     r1 = scoring.score_stock({**BASE, "dilution_pct": 12, "debt_ratio": 350, "memo_text": "CB 오버행, 유상증자"}, CFG)
-    assert r1["penalty"] == min(12 + 8 + 4.5, CFG["risk"]["max_total"])
-    assert r1["total"] < r0["total"]
+    assert r1["penalty"] == min(15 + 10 + 6, CFG["risk"]["max_total"])
+    assert r1["total"] < r0["total"] and r1["quality_fails"]
+
+
+def test_conservative_target():
+    from collector import thesis
+    r = {"price": 10000, "target_cons": 20000, "fwd_eps": 1000, "bench": {"per": 12}, "fwd_basis_short": "2026E"}
+    r["intrinsic"], _ = thesis.intrinsic_value(r, CFG)
+    assert r["intrinsic"] == 1000 * 0.8 * 12
+    t, src = thesis.conservative_target(r, CFG)
+    assert t == 9600 and src == "내재가치"          # min(20000×0.9, 9600)
+    sens = thesis.sensitivity(r, CFG)
+    assert sens["rows"][0]["values"][2] == 12000
 
 
 # ------------------------------------------------------------- 전략
@@ -129,18 +151,14 @@ def test_entry_and_exit_plan():
     assert x["tp1"] == 12000 and x["tp2"] == 14000
 
 
-def test_weights_cap_and_cash():
-    stocks = [{"code": str(i), "score": {"grade": "green", "total": 80}, "vol_annual": 20} for i in range(3)]
-    stocks.append({"code": "x", "score": {"grade": "red", "total": 20}, "vol_annual": 20})
-    strategy.portfolio_weights(stocks, 20, CFG)
-    assert all(s["weight_pct"] <= 15 for s in stocks) and stocks[-1]["weight_pct"] == 0
-    assert abs(sum(s["weight_pct"] for s in stocks) - 45) < 0.5   # 3종목 × 상한 15%
-    c = strategy.cash_policy({"last": 100, "ma_short": 90, "ma_long": 95}, 0, CFG)
-    assert c["cash_pct"] == 35 and c["trend_state"] == "above_both"
-
-
-def test_grade_caps():
-    from collector.main import apply_grade_caps
-    recs = [{"score": {"grade": "green", "total": 90 - i, "flags": []}} for i in range(5)]
-    apply_grade_caps(recs, {"max_green": 2, "max_yellow": 2})
-    assert [r["score"]["grade"] for r in recs] == ["green", "green", "yellow", "yellow", "white"]
+def test_weights_core_satellite_and_cash():
+    def mk(code, mcap, grade="green", total=80):
+        return {"code": code, "mcap_eok": mcap, "vol_annual": 30, "mos_pct": 20,
+                "score": {"grade": grade, "total": total, "quality_fails": []}}
+    stocks = [mk("a", 50000), mk("b", 30000), mk("c", 2000), mk("d", 1500), mk("x", 50000, "red", 20)]
+    port = strategy.portfolio_weights(stocks, 30, CFG)
+    assert port["core"] == ["a", "b"] and port["satellite"] == ["c", "d"]
+    w = {s["code"]: s["weight_pct"] for s in stocks}
+    assert all(v <= CFG["strategy"]["max_weight_pct"] for v in w.values()) and w["x"] == 0
+    c = strategy.cash_policy({"last": 100, "ma_short": 90, "ma_long": 95, "ret_12m": -5}, 0, CFG, (10, ["하이일드 스프레드 5.00% ≥ 4.5% (+10%p)"]))
+    assert c["cash_pct"] == 30 - 10 + 10 + 10 + 10   # 정률 30, 상승추세 -10, 절대모멘텀 +10, 🟢0 +10, 매크로 +10

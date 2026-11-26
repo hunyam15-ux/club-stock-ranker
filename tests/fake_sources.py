@@ -78,9 +78,25 @@ def fake_finance(sess, code):
     return ann, ["(데모) 회사 개요 문장 1입니다.", "(데모) 주요 사업 설명 문장입니다."]
 
 
+def fake_quarter(sess, code):
+    r = _rng(code + "q")
+    out = {}
+    for i, q in enumerate(["2025.09", "2025.12", "2026.03", "2026.06", "2026.09", "2026.12"]):
+        out[q] = {"estimate": q == "2026.12", "op_income": r.uniform(-50, 500), "revenue": r.uniform(1000, 5000)}
+    return out
+
+
+def fake_macro(sess):
+    return {"hy_spread": {"label": "미국 하이일드 스프레드", "value": 3.2, "chg_1m": 0.1, "date": "2026-11-25"},
+            "us10y": {"label": "미국 10년물 금리", "value": 4.4, "chg_1m": -0.1, "date": "2026-11-25"},
+            "kr10y": {"label": "한국 10년물 금리(월간)", "value": None}}
+
+
 def patch(setter):
     """setter(module, name, value) 로 가짜 함수를 끼운다 (pytest monkeypatch.setattr 또는 setattr)."""
-    from collector import consensus, market, universe
+    from collector import consensus, macro, market, universe
+    setter(consensus, "fetch_quarter", fake_quarter)
+    setter(macro, "fetch_macro", fake_macro)
     setter(market, "fetch_daily", fake_daily)
     setter(market, "fetch_naver_summary", fake_summary)
     setter(consensus, "fetch_finance", fake_finance)

@@ -176,6 +176,11 @@ def derive_from_daily(daily: list[list]) -> dict:
         seg = daily[-n:]
         out[f"low_{n}d"] = min(r[3] for r in seg)
         out[f"high_{n}d"] = max(r[2] for r in seg)
+    if len(closes) >= 200:
+        out["ma200"] = sum(closes[-200:]) / 200
+        out["below_ma200"] = closes[-1] < out["ma200"]
+    else:
+        out["ma200"], out["below_ma200"] = None, None
     # 60일 일간 수익률 표준편차(연율화)
     import math
     seg = closes[-61:]
@@ -207,4 +212,5 @@ def index_trend(daily: list[list], ma_short: int, ma_long: int) -> dict:
         out["ma_long"] = sum(closes[-ma_long:]) / ma_long
     if len(closes) > 21:
         out["ret_1m"] = (closes[-1] / closes[-22] - 1) * 100
+    out["ret_12m"] = (closes[-1] / closes[-246] - 1) * 100 if len(closes) > 245 else None
     return out

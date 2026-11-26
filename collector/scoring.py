@@ -1,9 +1,13 @@
-"""매수 점수·등급·한 줄 근거.
+"""매수 점수·등급·한 줄 근거 (보수적 버전).
 
-입력 s(dict)의 주요 키 (없으면 None):
-  price, target, target_source, per, pbr, fwd_per, bench_per, bench_pbr,
-  eps_growth_next, turnaround, revision_pct, range_pos, ret_1m, ret_3m,
-  dilution_pct, debt_ratio, memo_text
+종목 선정 프로세스
+  ① 유니버스 필터(universe.py)
+  ② 퀄리티 게이트: 적자·낮은 ROE·과도한 부채·대규모 희석·데이터 부족 → 최고 ⚪ (가치 함정 회피)
+  ③ 알파 점수: 업사이드(보수적 목표가) · 가치(업종 대비·안전마진) · 성장 · 알파(서프라이즈·수주·컨센서스 상향) · 가격/위험(위치·저변동성)
+  ④ 리스크 감점(희석·부채·메모) · 떨어지는 칼날 → 최고 🟡
+  ⑤ 등급 정원(🟢·🟡)
+
+입력 s(dict)의 주요 키 (없으면 None) — main.score_input 참고.
 """
 from __future__ import annotations
 
@@ -15,6 +19,13 @@ GRADES = {
     "white": {"emoji": "⚪", "label": "관망"},
     "red": {"emoji": "🔴", "label": "비싸다(매수 금지)"},
 }
+ORDER = ["red", "white", "yellow", "green"]
+
+
+def target_label(src: str | None) -> str:
+    return {"컨센서스": "컨센서스 목표가", "보수적 목표가": "보수적 목표가", "내재가치": "내재가치",
+            "내재가치(상한)": "내재가치(상한 적용)",
+            "모델 적정가": "모델 적정가", "모임": "모임 목표가"}.get(src or "", "목표가")
 
 
 def _wavg(parts: dict[str, tuple[float | None, float]]) -> float | None:
@@ -26,35 +37,44 @@ def _wavg(parts: dict[str, tuple[float | None, float]]) -> float | None:
     return num / den if den else None
 
 
-def pick_target(club: float | None, cons: float | None, mode: str) -> tuple[float | None, str | None]:
-    if mode == "consensus_first":
-        return (cons, "컨센서스") if cons else ((club, "모임") if club else (None, None))
-    if mode == "average" and club and cons:
-        return (club + cons) / 2, "모임·컨센서스 평균"
-    return (club, "모임") if club else ((cons, "컨센서스") if cons else (None, None))
+def _cap(grade: str, max_grade: str) -> str:
+    return grade if ORDER.index(grade) <= ORDER.index(max_grade) else max_grade
+
+
+def quality_gate(s: dict, cfg: dict) -> list[str]:
+    """통과 못 한 사유 목록(빈 목록이면 통과)."""
+    q = cfg["quality"]
+    fails = []
+    if s.get("per") is not None and s["per"] <= 0:
+        fails.append("최근 4분기 적자")
+    elif s.get("op_income_last") is not None and s["op_income_last"] < 0:
+        fails.append("최근 연간 영업적자")
+    if s.get("roe") is not None and s["roe"] < q["min_roe"]:
+        fails.append(f"ROE {s['roe']:.1f}% < {q['min_roe']}%")
+    if s.get("debt_ratio") is not None and s["debt_ratio"] > q["max_debt_ratio"]:
+        fails.append(f"부채비율 {s['debt_ratio']:.0f}% > {q['max_debt_ratio']}%")
+    if s.get("dilution_pct") is not None and s["dilution_pct"] >= q["max_dilution_pct"]:
+        fails.append(f"잠재 희석 {s['dilution_pct']:.1f}% ≥ {q['max_dilution_pct']}%")
+    return fails
 
 
 def score_stock(s: dict, cfg: dict) -> dict:
     W = cfg["weights"]
+    miss = cfg.get("missing_component_score", 30)
     comps: dict[str, dict] = {}
 
-    # 1) 업사이드 --------------------------------------------------------
+    # 1) 업사이드 — 보수적 목표가 기준 ------------------------------------
     up = None
     if s.get("price") and s.get("target"):
         up = (s["target"] / s["price"] - 1) * 100
     u = cfg["upside"]
-    up_s = up
-    if up is not None and s.get("target_source") == "모델 적정가":
-        up_s = up * cfg.get("target", {}).get("model_upside_weight", 1.0)  # 추정 목표가는 할인 반영
-    comps["upside"] = {"score": lin_score(up_s, u["worst_pct"], u["best_pct"]), "value": up}
+    comps["upside"] = {"score": lin_score(up, u["worst_pct"], u["best_pct"]), "value": up}
 
-    # 2) 밸류에이션 ------------------------------------------------------
+    # 2) 가치 — 업종 대비 PER·PBR, Forward PER, 안전마진 -------------------
     v = cfg["valuation"]
     loss = v["loss_making_score"]
 
     def ratio_score(x, bench):
-        if x is None and bench is None:
-            return None, None
         if x is None or bench is None or bench <= 0:
             return None, None
         if x <= 0:
@@ -71,44 +91,60 @@ def score_stock(s: dict, cfg: dict) -> dict:
         elif s.get("per") and s["per"] > 0:
             fwd_r = s["fwd_per"] / s["per"]
             fwd_s = lin_score(fwd_r, v["fwd_ratio_worst"], v["fwd_ratio_best"])
-        elif s.get("per") is not None and s["per"] <= 0:
-            fwd_s = 80.0  # 현재 적자 → 예상 흑자(Forward PER 양수)
+    mos = s.get("mos_pct")
+    mos_s = lin_score(mos, v["mos_worst_pct"], v["mos_best_pct"])
     sw = v["sub_weights"]
-    comps["valuation"] = {
-        "score": _wavg({"per": (per_s, sw["per_vs_sector"]), "pbr": (pbr_s, sw["pbr_vs_sector"]),
-                        "fwd": (fwd_s, sw["forward_per"])}),
-        "per_ratio": per_r, "pbr_ratio": pbr_r, "fwd_ratio": fwd_r,
-        "sub": {"per": per_s, "pbr": pbr_s, "fwd": fwd_s},
-    }
+    comps["value"] = {"score": _wavg({"per": (per_s, sw["per_vs_sector"]), "pbr": (pbr_s, sw["pbr_vs_sector"]),
+                                      "fwd": (fwd_s, sw["forward_per"]), "mos": (mos_s, sw["margin_of_safety"])}),
+                      "per_ratio": per_r, "pbr_ratio": pbr_r, "fwd_ratio": fwd_r, "mos": mos,
+                      "sub": {"per": per_s, "pbr": pbr_s, "fwd": fwd_s, "mos": mos_s}}
 
-    # 3) 실적 모멘텀 -----------------------------------------------------
-    m = cfg["momentum"]
-    g = s.get("eps_growth_next")
-    if s.get("turnaround"):
-        g_s = float(m["turnaround_score"])
+    # 3) 성장 — EPS·영업이익 성장 -----------------------------------------
+    gcfg = cfg["growth"]
+    g = s.get("eps_growth")
+    g_s = float(gcfg["turnaround_score"]) if s.get("turnaround") else lin_score(g, gcfg["worst_pct"], gcfg["best_pct"])
+    og = s.get("op_growth")
+    og_s = lin_score(og, gcfg["worst_pct"], gcfg["best_pct"])
+    gsw = gcfg["sub_weights"]
+    comps["growth"] = {"score": _wavg({"eps": (g_s, gsw["eps_growth"]), "op": (og_s, gsw["op_growth"])}),
+                       "eps_growth": g, "op_growth": og, "sub": {"eps_growth": g_s, "op_growth": og_s}}
+
+    # 4) 알파 — 실적 서프라이즈 · 수주 · 컨센서스 상향 --------------------
+    a = cfg["alpha"]
+    sur = s.get("surprise_pct")
+    if sur is not None:
+        sur_s, sur_kind = lin_score(sur, a["surprise_worst_pct"], a["surprise_best_pct"]), "서프라이즈"
+    elif s.get("q_op_yoy") is not None:
+        sur_s, sur_kind = lin_score(s["q_op_yoy"], a["q_yoy_worst_pct"], a["q_yoy_best_pct"]), "분기 영업이익 YoY(대리)"
+    elif s.get("q_turnaround"):
+        sur_s, sur_kind = 80.0, "분기 흑자전환"
     else:
-        g_s = lin_score(g, m["eps_growth_worst_pct"], m["eps_growth_best_pct"])
+        sur_s, sur_kind = None, None
+    od = s.get("orders_pct")
+    od_s = lin_score(od, a["orders_worst_pct"], a["orders_best_pct"]) if (s.get("orders_count") or 0) > 0 else None
     rev = s.get("revision_pct")
-    rev_s = lin_score(rev, m["revision_worst_pct"], m["revision_best_pct"])
-    msw = m["sub_weights"]
-    comps["momentum"] = {"score": _wavg({"g": (g_s, msw["eps_growth"]), "r": (rev_s, msw["revision"])}),
-                         "eps_growth": g, "revision": rev, "sub": {"eps_growth": g_s, "revision": rev_s}}
+    rev_s = lin_score(rev, a["revision_worst_pct"], a["revision_best_pct"])
+    asw = a["sub_weights"]
+    comps["alpha"] = {"score": _wavg({"s": (sur_s, asw["surprise"]), "o": (od_s, asw["orders"]), "r": (rev_s, asw["revision"])}),
+                      "surprise": sur, "surprise_kind": sur_kind, "orders_pct": od, "revision": rev,
+                      "sub": {"surprise": sur_s, "orders": od_s, "revision": rev_s}}
 
-    # 4) 가격 위치 -------------------------------------------------------
-    p = cfg["price_position"]
+    # 5) 가격·위험 — 52주 위치, 3개월 수익률, 저변동성 ---------------------
+    p = cfg["price_risk"]
     pos = s.get("range_pos")
     pos_s = None if pos is None else clamp((1 - pos) * 100, 0, 100)
     r3 = lin_score(s.get("ret_3m"), p["return_3m_worst_pct"], p["return_3m_best_pct"])
-    r1 = lin_score(s.get("ret_1m"), p["return_1m_worst_pct"], p["return_1m_best_pct"])
+    vol_s = lin_score(s.get("vol_annual"), p["vol_worst_pct"], p["vol_best_pct"])
     psw = p["sub_weights"]
-    comps["price_position"] = {"score": _wavg({"pos": (pos_s, psw["range_position"]), "r3": (r3, psw["return_3m"]),
-                                                "r1": (r1, psw["return_1m"])}),
-                               "range_pos": pos, "sub": {"range_position": pos_s, "return_3m": r3, "return_1m": r1}}
+    comps["price_risk"] = {"score": _wavg({"pos": (pos_s, psw["range_position"]), "r3": (r3, psw["return_3m"]),
+                                           "vol": (vol_s, psw["low_volatility"])}),
+                           "range_pos": pos, "sub": {"range_position": pos_s, "return_3m": r3, "low_volatility": vol_s}}
 
     for k in comps:
         comps[k]["weight"] = float(W.get(k, 0))
+        comps[k]["missing"] = comps[k]["score"] is None
 
-    # 5) 리스크 감점 -----------------------------------------------------
+    # 리스크 감점 ---------------------------------------------------------
     rk = cfg["risk"]
     pen = {}
     dil = s.get("dilution_pct")
@@ -116,16 +152,16 @@ def score_stock(s: dict, cfg: dict) -> dict:
     dr = s.get("debt_ratio")
     pen["debt"] = None if dr is None else clamp((dr - rk["debt_ratio_start_pct"]) /
                                                 (rk["debt_ratio_full_pct"] - rk["debt_ratio_start_pct"]), 0, 1) * rk["debt_points"]
-    memo = (s.get("memo_text") or "")
+    memo = s.get("memo_text") or ""
     hits = [kw for kw in rk["memo_keywords"] if kw.lower() in memo.lower()]
     pen["memo"] = min(len(hits) * rk["memo_points_per_keyword"], rk["memo_points_max"])
     penalty = min(sum(x for x in pen.values() if x), rk["max_total"])
 
-    # 총점 ---------------------------------------------------------------
+    # 총점: 결측 항목은 제외하지 않고 보수적 점수(missing_component_score)로 계산 --------
     total_w = sum(c["weight"] for c in comps.values())
     have_w = sum(c["weight"] for c in comps.values() if c["score"] is not None)
     coverage = have_w / total_w if total_w else 0
-    base = _wavg({k: (c["score"], c["weight"]) for k, c in comps.items()})
+    base = _wavg({k: (c["score"] if c["score"] is not None else miss, c["weight"]) for k, c in comps.items()})
     total = None if base is None else round(clamp(base - penalty, 0, 100), 1)
 
     gc = cfg["grades"]
@@ -140,26 +176,38 @@ def score_stock(s: dict, cfg: dict) -> dict:
     else:
         grade = "red"
     flags = []
-    if coverage < gc["min_coverage"] and grade in ("green", "yellow"):
-        grade = "white"
-        flags.append("데이터 부족")
+
+    # 퀄리티 게이트 → 최고 ⚪
+    fails = quality_gate(s, cfg)
+    if coverage < gc["min_coverage"]:
+        fails.append(f"데이터 부족(충족률 {coverage * 100:.0f}%)")
+    if fails:
+        new = _cap(grade, "white")
+        if new != grade:
+            flags.append("퀄리티 미달")
+        grade = new
+    # 떨어지는 칼날 → 최고 🟡
+    fk = cfg["falling_knife"]
+    knife = (s.get("ret_3m") is not None and s["ret_3m"] <= fk["ret_3m_pct"]
+             and bool(s.get("below_ma200")) and not (rev is not None and rev > 0))
+    if knife:
+        new = _cap(grade, "yellow")
+        if new != grade:
+            flags.append("하락 추세(떨어지는 칼날)")
+        grade = new
     if gc.get("red_if_negative_upside") and up is not None and up <= 0:
         grade = "red"
-        flags.append("현재가 ≥ 목표가")
+        flags.append("현재가 ≥ 보수적 목표가")
 
     result = {
         "total": total, "base": None if base is None else round(base, 1), "penalty": round(penalty, 1),
         "penalty_detail": {k: (None if v is None else round(v, 1)) for k, v in pen.items()},
         "memo_hits": hits, "coverage": round(coverage, 2), "components": comps,
         "grade": grade, "grade_emoji": GRADES[grade]["emoji"], "grade_label": GRADES[grade]["label"],
-        "flags": flags, "upside_pct": up,
+        "flags": flags, "upside_pct": up, "quality_fails": fails, "falling_knife": bool(knife),
     }
     result["reason"] = reason_line(s, result)
     return result
-
-
-def target_label(src: str | None) -> str:
-    return {"컨센서스": "컨센서스 목표가", "모델 적정가": "모델 적정가", "모임": "모임 목표가"}.get(src or "", "목표가")
 
 
 def _f(x, d=0):
@@ -167,48 +215,51 @@ def _f(x, d=0):
 
 
 def reason_line(s: dict, r: dict) -> str:
-    """판단 근거 한 줄: 등급에 맞는 방향의 핵심 요인 2~3개."""
+    """판단 근거 한 줄: 등급 방향의 핵심 요인 2~3개."""
     c = r["components"]
-    pos, neg = [], []  # (강도, 문구)
+    pos, neg = [], []
     up = r["upside_pct"]
     if up is not None:
         txt = f"{target_label(s.get('target_source'))} 대비 {_f(up)}"
-        (pos if up >= 15 else neg).append((abs(up - 15) + 10, txt))
-    pr = c["valuation"].get("per_ratio")
+        (pos if up >= 20 else neg).append((abs(up - 20) + 10, txt))
+    mos = c["value"].get("mos")
+    if mos is not None and mos >= 15:
+        pos.append((mos, f"안전마진 {_f(mos)}"))
+    pr = c["value"].get("per_ratio")
     if pr is not None:
         d = (1 - pr) * 100
         txt = f"PER 업종 대비 {abs(d):.0f}% {'할인' if d >= 0 else '할증'}"
-        (pos if d >= 10 else neg if d <= -10 else []).append((abs(d), txt))
+        if d >= 15:
+            pos.append((d, txt))
+        elif d <= -30:
+            neg.append((-d / 2, txt))
     elif s.get("per") is not None and s["per"] <= 0:
-        neg.append((20, "적자(PER 산출 불가)"))
-    br = c["valuation"].get("pbr_ratio")
-    if br is not None:
-        d = (1 - br) * 100
-        if abs(d) >= 25:
-            (pos if d > 0 else neg).append((abs(d) * 0.6, f"PBR 업종 대비 {abs(d):.0f}% {'할인' if d > 0 else '할증'}"))
-    g = c["momentum"].get("eps_growth")
+        neg.append((30, "적자(PER 산출 불가)"))
+    a = c["alpha"]
+    if a.get("surprise") is not None and abs(a["surprise"]) >= 5:
+        (pos if a["surprise"] > 0 else neg).append((abs(a["surprise"]) * 3, f"실적 서프라이즈 {_f(a['surprise'])}"))
+    elif s.get("q_op_yoy") is not None and abs(s["q_op_yoy"]) >= 30:
+        (pos if s["q_op_yoy"] > 0 else neg).append((min(abs(s["q_op_yoy"]), 100) * 0.4, f"최근 분기 영업이익 YoY {_f(s['q_op_yoy'])}"))
+    if (s.get("orders_count") or 0) > 0 and (s.get("orders_pct") or 0) >= 10:
+        pos.append((s["orders_pct"], f"최근 수주 공시 매출 대비 {s['orders_pct']:.0f}%"))
+    g = c["growth"].get("eps_growth")
     if s.get("turnaround"):
         pos.append((40, "흑자전환 예상"))
-    elif g is not None:
-        (pos if g >= 10 else neg if g < 0 else []).append((abs(g), f"{s.get('eps_growth_label') or '예상 EPS'} {_f(g)}"))
-    rev = c["momentum"].get("revision")
+    elif g is not None and (g >= 15 or g < 0):
+        (pos if g >= 15 else neg).append((min(abs(g), 100) * 0.5, f"{s.get('eps_growth_label') or '예상 EPS'} {_f(g)}"))
+    rev = a.get("revision")
     if rev is not None and abs(rev) >= 3:
         (pos if rev > 0 else neg).append((abs(rev) * 3, f"컨센서스 {'상향' if rev > 0 else '하향'} {_f(rev, 1)}"))
-    rp = c["price_position"].get("range_pos")
-    if rp is not None:
-        if rp <= 0.3:
-            pos.append((30 * (1 - rp), f"52주 범위 하단({rp * 100:.0f}%)"))
-        elif rp >= 0.85:
-            neg.append((30 * rp, f"52주 고점권({rp * 100:.0f}%)"))
-    if s.get("ret_3m") is not None and s["ret_3m"] >= 40:
-        neg.append((s["ret_3m"] / 2, f"3개월 {_f(s['ret_3m'])} 급등"))
+    rp = c["price_risk"].get("range_pos")
+    if rp is not None and rp >= 0.85:
+        neg.append((30 * rp, f"52주 고점권({rp * 100:.0f}%)"))
+    if r["falling_knife"]:
+        neg.append((40, "하락 추세 지속"))
+    for f in r["quality_fails"][:2]:
+        neg.append((45, f))
     pd_ = r["penalty_detail"]
     if (pd_.get("dilution") or 0) >= 3:
         neg.append((25, f"잠재 희석 {s.get('dilution_pct', 0):.1f}%"))
-    if (pd_.get("debt") or 0) >= 3:
-        neg.append((20, f"부채비율 {s.get('debt_ratio', 0):.0f}%"))
-    if r["memo_hits"]:
-        neg.append((10, "메모 리스크: " + "·".join(r["memo_hits"][:2])))
 
     pos.sort(reverse=True)
     neg.sort(reverse=True)
@@ -217,7 +268,5 @@ def reason_line(s: dict, r: dict) -> str:
     elif r["grade"] == "red":
         parts = [t for _, t in neg[:2]] + [t for _, t in pos[:1]]
     else:
-        parts = [t for _, t in pos[:1]] + [t for _, t in neg[:2]]
-    if "데이터 부족" in r["flags"]:
-        parts.insert(0, f"데이터 부족(충족률 {r['coverage'] * 100:.0f}%)")
+        parts = [t for _, t in neg[:2]] + [t for _, t in pos[:1]]
     return ", ".join(parts[:3]) if parts else "판단 근거 데이터 부족"

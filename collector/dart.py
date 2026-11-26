@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -130,6 +131,45 @@ class Dart:
             top = next((r.get("nm") for r in common if (r.get("relate") or "").strip() in ("본인", "최대주주")), None)
             return {"pct": pct, "name": top, "basis": f"{y} {REPRT[rc]}"}
         return {}
+
+
+    # ------------------------------------------------------------ 신규 수주(단일판매·공급계약 공시)
+    def orders(self, corp: str, today: datetime, months: int = 6, max_docs: int = 6) -> dict:
+        """최근 N개월 '단일판매ㆍ공급계약체결' 공시 목록과 공시 본문의 '최근 매출액 대비(%)'.
+        분기보고서의 수주잔고는 정형 API가 없어, 수주 흐름은 이 공시로 추적한다."""
+        bgn = (today - timedelta(days=int(30.5 * months))).strftime("%Y%m%d")
+        items = self._call("list", corp_code=corp, bgn_de=bgn, end_de=today.strftime("%Y%m%d"),
+                           pblntf_ty="I", page_count=100).get("list", [])
+        sel = [it for it in items if "단일판매" in (it.get("report_nm") or "") or "공급계약" in (it.get("report_nm") or "")]
+        sel = [it for it in sel if "해지" not in (it.get("report_nm") or "")]
+        out = []
+        for it in sel[:max_docs]:
+            rec = {"date": it.get("rcept_dt"), "title": (it.get("report_nm") or "").strip(), "rcept_no": it.get("rcept_no"),
+                   "pct_of_sales": None, "amount_won": None}
+            try:
+                rec.update(self._order_detail(it["rcept_no"]))
+            except Exception:  # noqa: BLE001
+                pass
+            out.append(rec)
+        tot = sum(o["pct_of_sales"] or 0 for o in out)
+        return {"count": len(sel), "sum_pct_of_sales": round(tot, 1) if out else 0.0, "items": out, "months": months}
+
+    def _order_detail(self, rcept_no: str) -> dict:
+        r = get(self.sess, f"{BASE}/document.xml", params={"crtfc_key": self.key, "rcept_no": rcept_no}, timeout=40, sleep=0.15)
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            raw = b"".join(z.read(n) for n in z.namelist())
+        txt = raw.decode("utf-8", errors="ignore")
+        txt = re.sub(r"<[^>]+>", " ", txt)
+        txt = re.sub(r"&nbsp;|&#160;", " ", txt)
+        txt = re.sub(r"\s+", " ", txt)
+        out = {}
+        m = re.search(r"매출액\s*대비\s*\(?\s*%?\s*\)?\s*([\d.,]+)", txt)
+        if m:
+            out["pct_of_sales"] = to_num(m.group(1))
+        m = re.search(r"계약금액(?:\s*총액)?\s*\(?\s*원?\s*\)?\s*([\d,]{5,})", txt)
+        if m:
+            out["amount_won"] = to_num(m.group(1))
+        return out
 
 
 def _recent_reports(today: datetime):
