@@ -29,10 +29,15 @@ jobs:
           ua = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                 "Accept-Language": "ko-KR,ko;q=0.9"}
           urls = {
-            "fred_hy.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2&cosd=2025-10-01",
-            "fred_dgs10.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2025-10-01",
-            "fred_hy_plain.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2",
+            "treasury.csv": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv",
           }
+          for fn, u, h in [("fred_curl.csv", "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2", {"User-Agent": "curl/8.5.0"}),
+                           ("fred_noua.csv", "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10", {})]:
+              try:
+                  r = requests.get(u, headers=h, timeout=60)
+                  open(fn, "wb").write(r.content); print(fn, r.status_code, len(r.content))
+              except Exception as e:
+                  open(fn + ".err", "w").write(repr(e)); print(fn, "ERR", e)
           for fn, u in urls.items():
               try:
                   r = requests.get(u, headers=ua, timeout=30)
