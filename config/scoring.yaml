@@ -45,7 +45,7 @@ target:
   source_order: [consensus, model, club]   # (consensus_first 모드에서만 사용)
   model_haircut: 0.85
   model_per_cap: 30
-  model_upside_weight: 0.7
+  model_upside_weight: 0.7    # 컨센서스 없이 내재가치만으로 낸 업사이드는 점수 계산 시 70%만 인정
   sensitivity_eps_cuts: [0, -10, -20, -30, -40]     # 상세 화면 민감도 표
   sensitivity_per_mults: [0.6, 0.8, 1.0, 1.2]       # × 업종 중앙 PER
 

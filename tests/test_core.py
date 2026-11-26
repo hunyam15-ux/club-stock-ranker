@@ -87,7 +87,7 @@ def test_naver_annual():
 
 # ------------------------------------------------------------- 점수
 BASE = dict(price=10000, target=14000, target_source="보수적 목표가", per=8, pbr=0.8, fwd_per=6, bench_per=12,
-            bench_pbr=1.2, mos_pct=40, eps_growth=25, op_growth=30, turnaround=False, roe=14, op_income_last=500,
+            bench_pbr=1.2, mos_pct=40, has_consensus=True, eps_growth=25, op_growth=30, turnaround=False, roe=14, op_income_last=500,
             surprise_pct=8, q_op_yoy=40, orders_pct=20, orders_count=2, revision_pct=3, range_pos=0.25,
             ret_1m=-5, ret_3m=-10, vol_annual=30, below_ma200=False, dilution_pct=0, debt_ratio=60, memo_text="")
 

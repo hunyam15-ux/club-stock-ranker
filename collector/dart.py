@@ -163,9 +163,11 @@ class Dart:
         txt = re.sub(r"&nbsp;|&#160;", " ", txt)
         txt = re.sub(r"\s+", " ", txt)
         out = {}
-        m = re.search(r"매출액\s*대비\s*\(?\s*%?\s*\)?\s*([\d.,]+)", txt)
+        m = re.search(r"매출액\s*대비\s*\(\s*%\s*\)\s*([\d.,]+)", txt)
         if m:
-            out["pct_of_sales"] = to_num(m.group(1))
+            v = to_num(m.group(1))
+            if v is not None and 0 <= v <= 5000:  # 비율이 아닌 금액이 잡히는 경우 방지
+                out["pct_of_sales"] = v
         m = re.search(r"계약금액(?:\s*총액)?\s*\(?\s*원?\s*\)?\s*([\d,]{5,})", txt)
         if m:
             out["amount_won"] = to_num(m.group(1))

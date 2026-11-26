@@ -29,14 +29,9 @@ jobs:
           ua = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                 "Accept-Language": "ko-KR,ko;q=0.9"}
           urls = {
-            "list_kospi.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=1&pageSize=100",
-            "list_kosdaq.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSDAQ?page=1&pageSize=100",
-            "list_kospi_p30.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=30&pageSize=100",
-            "basic.json": f"https://m.stock.naver.com/api/stock/{code}/basic",
-            "industry_278.json": "https://m.stock.naver.com/api/stocks/industry/278?page=1&pageSize=20",
-            "industry_list.json": "https://m.stock.naver.com/api/stocks/industry?page=1&pageSize=100",
-            "front_industry.json": "https://m.stock.naver.com/front-api/stock/domestic/industry/list",
-            "naver_upjong.html": "https://finance.naver.com/sise/sise_group.naver?type=upjong",
+            "fred_hy.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2&cosd=2025-10-01",
+            "fred_dgs10.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2025-10-01",
+            "fred_hy_plain.csv": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2",
           }
           for fn, u in urls.items():
               try:

@@ -68,7 +68,10 @@ def score_stock(s: dict, cfg: dict) -> dict:
     if s.get("price") and s.get("target"):
         up = (s["target"] / s["price"] - 1) * 100
     u = cfg["upside"]
-    comps["upside"] = {"score": lin_score(up, u["worst_pct"], u["best_pct"]), "value": up}
+    up_s = up
+    if up is not None and not s.get("has_consensus"):
+        up_s = up * cfg["target"].get("model_upside_weight", 1.0)  # 컨센서스 없는 추정 목표가는 할인 반영
+    comps["upside"] = {"score": lin_score(up_s, u["worst_pct"], u["best_pct"]), "value": up}
 
     # 2) 가치 — 업종 대비 PER·PBR, Forward PER, 안전마진 -------------------
     v = cfg["valuation"]
@@ -176,6 +179,10 @@ def score_stock(s: dict, cfg: dict) -> dict:
     else:
         grade = "red"
     flags = []
+    # 🔴(매수 금지)는 '비싸다'는 근거가 있을 때만: 데이터가 부족해 점수가 낮은 것은 ⚪(관망)
+    if grade == "red" and coverage < gc["min_coverage"] and not (up is not None and up <= 0):
+        grade = "white"
+        flags.append("데이터 부족으로 관망")
 
     # 퀄리티 게이트 → 최고 ⚪
     fails = quality_gate(s, cfg)

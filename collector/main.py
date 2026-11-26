@@ -243,7 +243,7 @@ def score_input(r: dict) -> dict:
         "eps_growth": first(est.get("eps_g_next"), est.get("eps_g_cur")),
         "eps_growth_label": r["eps_growth_label"],
         "op_growth": r.get("op_growth"), "turnaround": r["turnaround"],
-        "mos_pct": r.get("mos_pct"), "roe": r.get("roe"), "op_income_last": r.get("op_income_last"),
+        "mos_pct": r.get("mos_pct"), "roe": r.get("roe"), "has_consensus": bool(r.get("target_cons")), "op_income_last": r.get("op_income_last"),
         "surprise_pct": r.get("surprise_pct"), "q_op_yoy": r.get("q_op_yoy"), "q_turnaround": r.get("q_turnaround"),
         "orders_pct": (r.get("orders") or {}).get("sum_pct_of_sales"), "orders_count": (r.get("orders") or {}).get("count"),
         "revision_pct": r.get("revision_pct"), "range_pos": r["range_pos"],
