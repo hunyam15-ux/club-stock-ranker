@@ -29,15 +29,14 @@ jobs:
           ua = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                 "Accept-Language": "ko-KR,ko;q=0.9"}
           urls = {
-            "fnguide_main.html": f"https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A{code}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701",
-            "naver_main.html": f"https://finance.naver.com/item/main.naver?code={code}",
-            "naver_integration.json": f"https://m.stock.naver.com/api/stock/{code}/integration",
-            "naver_finance_annual.json": f"https://m.stock.naver.com/api/stock/{code}/finance/annual",
-            "fnguide_http.html": f"http://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A{code}",
-            "fnguide_cons.html": f"https://comp.fnguide.com/SVO2/ASP/SVD_Consensus.asp?pGB=1&gicode=A{code}",
-            "wise_c1010001.html": f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={code}",
-            "wise_c1050001.html": f"https://navercomp.wisereport.co.kr/v2/company/c1050001.aspx?cmp_cd={code}",
-            "naver_finance_quarter.json": f"https://m.stock.naver.com/api/stock/{code}/finance/quarter",
+            "list_kospi.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=1&pageSize=100",
+            "list_kosdaq.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSDAQ?page=1&pageSize=100",
+            "list_kospi_p30.json": "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=30&pageSize=100",
+            "basic.json": f"https://m.stock.naver.com/api/stock/{code}/basic",
+            "industry_278.json": "https://m.stock.naver.com/api/stocks/industry/278?page=1&pageSize=20",
+            "industry_list.json": "https://m.stock.naver.com/api/stocks/industry?page=1&pageSize=100",
+            "front_industry.json": "https://m.stock.naver.com/front-api/stock/domestic/industry/list",
+            "naver_upjong.html": "https://finance.naver.com/sise/sise_group.naver?type=upjong",
           }
           for fn, u in urls.items():
               try:
