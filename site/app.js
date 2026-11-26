@@ -197,14 +197,17 @@
       ["4", "분산 규칙", `같은 그룹 1개 · 섹터 ${R.max_per_sector || 2}종목·주식 몫 ${R.max_sector_pct || 40}%까지`],
       ["5", "비중", "점수 × (1+안전마진) ÷ 변동성, 종목 상한"],
     ];
-    return `<details class="sel" open><summary><span class="pt" style="margin:0">어떻게 골랐나</span>
-        <span class="tmuted">후보 ${log.length}개 심사 · 편입 ${nIn} · ${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ")}</span></summary>
-      <div class="ssteps">${steps.map(([n, t, d]) => `<div class="sst"><span class="sn">${n}</span><div><b>${t}</b><em>${esc(d)}</em></div></div>`).join("")}</div>
-      <div class="slog">${log.map((e) => `<a class="sl ${e.status}" href="#/stock/${esc(e.code)}">
+    const row = (e) => `<a class="sl ${e.status}" href="#/stock/${esc(e.code)}">
           <span class="sl-t">${e.status === "in" ? "편입" : "제외"}</span>
           <span class="sl-n"><b>${esc(e.name)}</b><em>${esc(e.sector)} · ${esc(e.bucket)}${e.holdco ? " · 지주사" : ""}</em></span>
           <span class="sl-s">${isNum(e.total) ? e.total.toFixed(1) : "-"}점</span>
-          <span class="sl-w">${e.status === "in" ? `<b>${(e.weight_pct || 0).toFixed(1)}%</b>` : esc(e.why)}</span></a>`).join("")}</div>
+          <span class="sl-w">${e.status === "in" ? `<b>${(e.weight_pct || 0).toFixed(1)}%</b>` : esc(e.why)}</span></a>`;
+    return `<details class="sel" open><summary><span class="pt" style="margin:0">어떻게 골랐나</span>
+        <span class="tmuted">후보 ${log.length}개 심사 · 편입 ${nIn} · ${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ")}</span></summary>
+      <div class="ssteps">${steps.map(([n, t, d]) => `<div class="sst"><span class="sn">${n}</span><div><b>${t}</b><em>${esc(d)}</em></div></div>`).join("")}</div>
+      <div class="slog">${log.filter((e, i) => i < 12 || e.status === "in").map(row).join("")}</div>
+      ${log.length > 12 ? `<details class="smore"><summary>나머지 제외 후보 ${log.filter((e, i) => i >= 12 && e.status !== "in").length}개 보기</summary>
+        <div class="slog">${log.filter((e, i) => i >= 12 && e.status !== "in").map(row).join("")}</div></details>` : ""}
       <p class="tiny muted" style="margin:10px 2px 0">점수는 사람이 고른 테마·업황 판단이 아니라 수집된 숫자로만 계산합니다. 업황 전망(예: 반도체 사이클)은 반영돼 있지 않으니 최종 판단은 직접 해 주세요.</p></details>`;
   }
 
