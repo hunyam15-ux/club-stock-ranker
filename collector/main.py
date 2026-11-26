@@ -453,6 +453,7 @@ def main(argv=None) -> int:
     port = strategy.portfolio_weights(recs, cash["cash_pct"], cfg_sc)
     cash["effective_cash_pct"] = round(100 - sum(r["weight_pct"] for r in recs), 1)
     cash["portfolio_size"] = len(port["core"]) + len(port["satellite"])
+    port["allocation"] = strategy.asset_allocation(recs, port, cash["cash_pct"], mac, cfg_sc)
 
     for r in recs:
         if r["price"] and r.get("_daily"):

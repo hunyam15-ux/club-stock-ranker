@@ -156,13 +156,21 @@ def test_entry_and_exit_plan():
 
 
 def test_weights_core_satellite_and_cash():
-    def mk(code, mcap, grade="green", total=80):
+    def mk(code, mcap, grade="green", total=75):
         return {"code": code, "mcap_eok": mcap, "vol_annual": 30, "mos_pct": 20,
                 "score": {"grade": grade, "total": total, "quality_fails": []}}
-    stocks = [mk("a", 50000), mk("b", 30000), mk("c", 2000), mk("d", 1500), mk("x", 50000, "red", 20)]
-    port = strategy.portfolio_weights(stocks, 30, CFG)
-    assert port["core"] == ["a", "b"] and port["satellite"] == ["c", "d"]
+    stocks = [mk("a", 90000), mk("b", 50000), mk("c", 40000), mk("d", 30000), mk("e", 25000),
+              mk("s1", 3000), mk("s2", 2000), mk("s3", 1500), mk("x", 50000, "red", 20)]
+    port = strategy.portfolio_weights(stocks, 40, CFG)
+    assert port["core"] == ["a", "b", "c", "d"] and port["satellite"] == ["s1", "s2"]   # 코어 4 · 새틀라이트 2
     w = {s["code"]: s["weight_pct"] for s in stocks}
-    assert all(v <= CFG["strategy"]["max_weight_pct"] for v in w.values()) and w["x"] == 0
+    assert abs(w["a"] + w["b"] + w["c"] + w["d"] - 48) < 0.5 and w["x"] == 0      # 60 × 0.8
+    assert all(w[k] <= 8 for k in ("s1", "s2"))
+    alloc = strategy.asset_allocation(stocks, port, 40, {"kr10y": {"value": 3.0}}, CFG)
+    assert abs(sum(a["pct"] for a in alloc) - 100) < 0.5
+    # 진짜 개꿀 새틀라이트는 비중 확대
+    stocks2 = [mk("a", 90000), mk("s1", 3000, "green", 88)]
+    port2 = strategy.portfolio_weights(stocks2, 40, CFG)
+    assert port2["satellite_boost"] and stocks2[1]["weight_pct"] > 8
     c = strategy.cash_policy({"last": 100, "ma_short": 90, "ma_long": 95, "ret_12m": -5}, 0, CFG, (10, ["하이일드 스프레드 5.00% ≥ 4.5% (+10%p)"]))
-    assert c["cash_pct"] == 30 - 10 + 10 + 10 + 10   # 정률 30, 상승추세 -10, 절대모멘텀 +10, 🟢0 +10, 매크로 +10
+    assert c["cash_pct"] == 30 - 10 + 10 + 10 + 10

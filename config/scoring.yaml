@@ -127,13 +127,18 @@ strategy:
   take_profit_1_progress: 0.5
   take_profit_1_fraction: 0.333
   trailing_stop_pct: -10
-  max_weight_pct: 12                # 한 종목 최대 비중
+  max_weight_pct: 20                # 한 종목 최대 비중(코어)
   grade_multiplier: {green: 1.0, yellow: 0.5, white: 0, red: 0}
   core_satellite:
-    core_ratio: 0.7                 # 주식 몫의 70%는 코어(시총 1조↑·퀄리티 통과), 30%는 새틀라이트
-    core_min_mcap_eok: 10000
-    core_size: 10
-    satellite_size: 5
+    core_ratio: 0.8                 # 주식 몫의 80%는 코어(대형주), 20%는 새틀라이트(중소형)
+    core_min_mcap_eok: 20000        # 코어 = 시총 2조↑ · 퀄리티 통과
+    core_size: 4                    # 코어 최대 4종목
+    satellite_size: 2               # 새틀라이트 최대 2종목
+    satellite_max_weight_pct: 8     # 새틀라이트 한 종목 최대 8%
+    boost_score: 80                 # 새틀라이트가 '진짜 개꿀'(🟢·총점 80↑)이면
+    boost_ratio: 0.3                #   새틀라이트 몫을 30%까지,
+    boost_max_weight_pct: 15        #   한 종목 15%까지 허용
+    # 비중 상한 때문에 못 쓴 주식 몫은 지수 ETF(코스피200)로 채움
   value_weighting: true             # 비중 ∝ 총점 × (1+안전마진) ÷ 변동성 (가치 가중)
 
 # ---- 현금 관리: 정률투자 + 추세 + 절대모멘텀 + 매크로 불안요소 ----
@@ -158,3 +163,8 @@ cash:
   min_pct: 15
   max_pct: 70
   rebalance_band_pct: 5             # 실제 현금 비중이 권장치에서 ±5%p 벗어나면 리밸런싱
+  # 현금 몫을 어디에 둘지 (주식 외 자산)
+  parking:
+    base_split: {short_bond: 0.6, gov_bond: 0.15, cash: 0.25}   # 나머지: 단기채·금리형 ETF / 국채 ETF / 현금성
+    duration_kr10y: 3.5             # 한국 10년물이 이 이상이면 국채 비중을 늘림(금리 하락 시 차익)
+    duration_split: {short_bond: 0.5, gov_bond: 0.3, cash: 0.2}

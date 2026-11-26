@@ -53,26 +53,25 @@ def exit_plan(price: float, target: float | None, cfg: dict) -> dict:
 
 
 def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
-    """코어&새틀라이트 + 가치 가중.
+    """코어(대형주) & 새틀라이트(중소형) + 가치 가중.
     - 코어: 시총 기준 이상 · 퀄리티 통과 🟢/🟡 상위 core_size 종목 → 주식 몫 × core_ratio
     - 새틀라이트: 나머지 🟢/🟡 상위 satellite_size 종목 → 주식 몫 × (1−core_ratio)
-    - 각 바구니 안에서 비중 ∝ 등급배수 × 총점 × (1+안전마진) ÷ 변동성, 한 종목 상한 max_weight_pct
-    stocks 는 순위순. 각 종목에 weight_pct, bucket 을 채운다."""
+      단, 새틀라이트가 🟢 · 총점 boost_score 이상이면 boost_ratio·boost_max_weight 까지 허용
+    - 비중 ∝ 등급배수 × 총점 × (1+안전마진) ÷ 변동성, 상한으로 남는 몫은 지수 ETF"""
     sc = cfg["strategy"]
     cs = sc["core_satellite"]
     mult = sc["grade_multiplier"]
-    cap = sc["max_weight_pct"]
     elig = [s for s in stocks if s["score"]["grade"] in ("green", "yellow") and s["score"]["total"]]
     core = [s for s in elig if (s.get("mcap_eok") or 0) >= cs["core_min_mcap_eok"] and not s["score"]["quality_fails"]][: cs["core_size"]]
     core_codes = {s["code"] for s in core}
-    sat = [s for s in elig if s["code"] not in core_codes][: cs["satellite_size"]]
+    sat = [s for s in elig if s["code"] not in core_codes
+           and (s.get("mcap_eok") or 0) < cs["core_min_mcap_eok"]][: cs["satellite_size"]]  # 새틀라이트 = 중소형만
+    boost = any(s["score"]["grade"] == "green" and s["score"]["total"] >= cs["boost_score"] for s in sat)
+    sat_ratio = cs["boost_ratio"] if boost else 1 - cs["core_ratio"]
     investable = 100 - cash_pct
-    budgets = {"코어": investable * cs["core_ratio"], "새틀라이트": investable * (1 - cs["core_ratio"])}
-    if not core:
-        budgets = {"코어": 0, "새틀라이트": investable}
+    budgets = {"코어": investable * (1 - sat_ratio), "새틀라이트": investable * sat_ratio}
     if not sat:
-        budgets["코어"] += budgets["새틀라이트"]
-        budgets["새틀라이트"] = 0
+        budgets = {"코어": investable, "새틀라이트": 0}
     for s in stocks:
         s["weight_pct"], s["bucket"] = 0.0, None
 
@@ -82,11 +81,43 @@ def portfolio_weights(stocks: list[dict], cash_pct: float, cfg: dict) -> dict:
         vw = (1 + clamp(mos or 0, -50, 100) / 100) if sc.get("value_weighting") else 1
         return mult.get(s["score"]["grade"], 0) * s["score"]["total"] * vw / clamp(vol, 15, 120)
 
+    caps = {"코어": sc["max_weight_pct"], "새틀라이트": cs["boost_max_weight_pct"] if boost else cs["satellite_max_weight_pct"]}
     for name, bucket in (("코어", core), ("새틀라이트", sat)):
-        w = _alloc({s["code"]: raw(s) for s in bucket}, budgets[name], cap)
+        w = _alloc({s["code"]: raw(s) for s in bucket}, budgets[name], caps[name])
         for s in bucket:
             s["weight_pct"], s["bucket"] = round(w.get(s["code"], 0.0), 1), name
-    return {"core": [s["code"] for s in core], "satellite": [s["code"] for s in sat], "budgets": budgets}
+    used = sum(s["weight_pct"] for s in stocks)
+    return {"core": [s["code"] for s in core], "satellite": [s["code"] for s in sat], "budgets": budgets,
+            "satellite_boost": boost, "index_etf_pct": round(max(0.0, investable - used), 1), "caps": caps}
+
+
+def asset_allocation(stocks: list[dict], port: dict, cash_pct: float, macro: dict | None, cfg: dict) -> list[dict]:
+    """전체 자산 배분: 개별주식(코어·새틀라이트) · 지수 ETF · 단기채/금리형 ETF · 국채 ETF · 현금성."""
+    pk = cfg["cash"]["parking"]
+    core = sum(s["weight_pct"] for s in stocks if s.get("bucket") == "코어")
+    sat = sum(s["weight_pct"] for s in stocks if s.get("bucket") == "새틀라이트")
+    etf = port.get("index_etf_pct", 0.0)
+    # 목표 비중 기준 배분. 분할매수 2·3차 미체결분은 체결 전까지 현금성(CMA)에서 대기한다(안내 문구로 표시).
+    split = cfg["strategy"]["entry_split"]
+    unfilled = round((core + sat) * (1 - split[0]), 1)
+    standby = 0
+    kr10 = ((macro or {}).get("kr10y") or {}).get("value")
+    dur = kr10 is not None and kr10 >= pk["duration_kr10y"]
+    sp = pk["duration_split"] if dur else pk["base_split"]
+    rest = cash_pct - standby
+    out = [
+        {"key": "core", "label": "개별주식 · 코어", "pct": core, "color": "#3182f6", "note": "대형주 · 퀄리티 통과"},
+        {"key": "sat", "label": "개별주식 · 새틀라이트", "pct": sat, "color": "#a78bfa", "note": "중소형 알파" + (" (개꿀 가중)" if port.get("satellite_boost") else "")},
+        {"key": "etf", "label": "지수 ETF (코스피200)", "pct": etf, "color": "#2fca73", "note": "종목 비중 상한으로 남은 주식 몫"},
+        {"key": "short_bond", "label": "단기채·금리형 ETF", "pct": rest * sp["short_bond"], "color": "#ffc342", "note": "KOFR·CD금리·단기 국공채 — 매일 이자, 원금 변동 작음"},
+        {"key": "gov_bond", "label": "국채 ETF(중장기)", "pct": rest * sp["gov_bond"], "color": "#f59e0b",
+         "note": "금리 하락 시 차익" + (f" · 한국 10년물 {kr10:.2f}% ≥ {pk['duration_kr10y']}%라 비중 확대" if dur else "")},
+        {"key": "cash", "label": "현금성 (CMA·파킹통장)", "pct": rest * sp["cash"] + standby, "color": "#6b7280",
+         "note": f"바로 꺼낼 수 있는 자금 · 분할매수 2·3차 미체결분(최대 {unfilled:.0f}%p)도 체결 전까지 여기서 대기"},
+    ]
+    for o in out:
+        o["pct"] = round(o["pct"], 1)
+    return out
 
 
 def _alloc(raw: dict, budget: float, cap: float) -> dict:

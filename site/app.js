@@ -94,14 +94,8 @@
       `<text x="64" y="62" text-anchor="middle" font-size="24" font-weight="800" fill="#f2f3f5">${cp.toFixed(0)}%</text><text x="64" y="80" text-anchor="middle" font-size="11" fill="#7d818b">권장 현금</text>`);
     const tot = ["green", "yellow", "white", "red"].reduce((a, g) => a + (gc[g] || 0), 0) || 1;
     const gcol = { green: "#2fca73", yellow: "#ffc342", white: "#6b7280", red: "#ff6b6b" };
-    $status.innerHTML = `<div class="hgrid">
+    $status.innerHTML = `${portfolioTop()}<div class="hgrid">
       ${idxCard("KOSPI", "코스피")}${idxCard("KOSDAQ", "코스닥")}
-      <div class="hcard"><div class="hk">권장 자산 배분</div>
-        <div class="alloc">${dn}<div class="alleg">
-          <div><i style="background:#3182f6"></i>코어 <b>${core.toFixed(0)}%</b></div>
-          <div><i style="background:#a78bfa"></i>새틀라이트 <b>${sat.toFixed(0)}%</b></div>
-          <div><i style="background:#4e5968"></i>현금 <b>${(100 - core - sat).toFixed(0)}%</b></div>
-          <div class="hs">${P.length}종목 · 가치 가중</div></div></div></div>
       <div class="hcard"><div class="hk">매수 등급 분포 <span class="tmuted">· 눌러서 필터</span></div>
         <div class="hv"><b class="cu" data-to="${u.analyzed || 0}">${n0(u.analyzed)}</b><span class="unit">종목 분석</span></div>
         <div class="gstack">${["green", "yellow", "white", "red"].map((g) => `<a href="#/" data-grade="${g}" style="flex:${Math.max(gc[g] || 0, tot * 0.02)};background:${gcol[g]}" data-tip="${gradeShort[g]} ${gc[g] || 0}종목 (${(((gc[g] || 0) / tot) * 100).toFixed(0)}%)"></a>`).join("")}</div>
@@ -109,12 +103,39 @@
         <div class="hs">${esc(String(m.generated_at || "").replace(" KST", ""))} 갱신 · 코스피·코스닥 ${n0(u.listed)}개 중</div></div>
     </div>
     <div class="hcard macro2">${macroHtml(m)}</div>${warn}`;
+    $status.querySelectorAll(".pslice[data-href]").forEach((g) => g.addEventListener("click", () => { location.hash = g.dataset.href; }));
     $status.querySelectorAll(".ich").forEach((el) => Viz.indexChart(el, (IS[el.dataset.sym] || {}).rows, { height: window.innerWidth < 720 ? 70 : 96 }));
     $status.querySelectorAll(".cu").forEach((el) => { const v = parseFloat(el.dataset.to); if (isFinite(v)) Viz.countUp(el, v, { dec: +(el.dataset.dec || 0) }); });
     $status.querySelectorAll("[data-grade]").forEach((a) => a.addEventListener("click", (e) => {
       e.preventDefault(); state.grades = new Set([a.dataset.grade]); state.jumpAll = true;
       if (location.hash === "#/" || location.hash === "") route(); else location.hash = "#/";
     }));
+  }
+
+  function portfolioTop() {
+    const m = DATA.meta, port = m.portfolio || {}, alloc = port.allocation || [], c = m.cash || {};
+    const P = DATA.stocks.filter((s) => s.weight_pct > 0).sort((a, b) => (a.bucket === b.bucket ? b.weight_pct - a.weight_pct : a.bucket === "코어" ? -1 : 1));
+    if (!alloc.length) return "";
+    const eq = alloc.filter((a) => ["core", "sat", "etf"].includes(a.key)).reduce((x, a) => x + a.pct, 0);
+    const pal = { 코어: ["#1d6ff2", "#3182f6", "#5b9bff", "#8ab6ff"], 새틀라이트: ["#8b5cf6", "#b49cfb"] };
+    const cnt = { 코어: 0, 새틀라이트: 0 };
+    const stockParts = P.map((s) => ({ label: s.name, value: s.weight_pct, color: pal[s.bucket][cnt[s.bucket]++ % pal[s.bucket].length],
+      tip: `${esc(s.name)} ${s.weight_pct.toFixed(1)}% · ${esc(s.bucket)} · ${gradeShort[s.score.grade]} ${isNum(s.score.total) ? s.score.total.toFixed(0) + "점" : ""}`, href: `#/stock/${s.code}` }));
+    if (port.index_etf_pct > 0) stockParts.push({ label: "지수 ETF", value: port.index_etf_pct, color: "#2fca73", tip: `지수 ETF(코스피200) ${port.index_etf_pct.toFixed(1)}%` });
+    const center = (t, sub) => `<text x="50%" y="47%" text-anchor="middle" font-size="22" font-weight="800" fill="#f2f3f5">${t}</text><text x="50%" y="59%" text-anchor="middle" font-size="11" fill="#7d818b">${sub}</text>`;
+    return `<div class="ptop">
+      <div class="ptop-h"><div><h2>오늘의 포트폴리오</h2><div class="hs">총자산 100% 기준 · 주식 ${eq.toFixed(0)}% / 주식 외 ${(100 - eq).toFixed(0)}% · ${esc(String(m.generated_at || "").replace(" KST", ""))}</div></div>
+        <a class="pbtn" href="#/rules">배분 원칙 →</a></div>
+      <div class="pgrid">
+        <div class="pcol"><div class="pt">전체 자산 배분</div>
+          <div class="prow2">${Viz.pie(alloc.map((a) => ({ label: a.label, value: a.pct, color: a.color, tip: `${a.label} ${a.pct.toFixed(1)}% — ${a.note}` })), 190, { hole: 52, center: center(eq.toFixed(0) + "%", "주식 비중") })}
+            <div class="plegend">${alloc.map((a) => `<div class="pl" data-tip="${esc(a.note)}"><i style="background:${a.color}"></i><span>${esc(a.label)}</span><b>${a.pct.toFixed(1)}%</b></div>`).join("")}</div></div></div>
+        <div class="pcol"><div class="pt">주식 몫 구성 <span class="tmuted">코어 ${port.core?.length || 0} · 새틀라이트 ${port.satellite?.length || 0}${port.satellite_boost ? " · 개꿀 가중" : ""}</span></div>
+          <div class="prow2">${Viz.pie(stockParts, 190, { hole: 52, center: center(P.length + "종목", "+ 지수 ETF") })}
+            <div class="plegend">${P.map((s, i) => `<a class="pl stock" href="#/stock/${esc(s.code)}"><i style="background:${stockParts[i].color}"></i><span><b class="nm2">${esc(s.name)}</b><em>${esc(s.bucket)} · ${gradeShort[s.score.grade]} · 업사이드 ${sgn(s.score.upside_pct, 0)}</em></span><b>${s.weight_pct.toFixed(1)}%</b></a>`).join("")}
+              ${port.index_etf_pct > 0 ? `<div class="pl"><i style="background:#2fca73"></i><span><b class="nm2">지수 ETF (코스피200)</b><em>비중 상한으로 남은 주식 몫</em></span><b>${port.index_etf_pct.toFixed(1)}%</b></div>` : ""}
+              ${!P.length ? '<p class="muted small">현재 매수 등급 종목이 없어 주식 몫은 지수 ETF로 채웁니다.</p>' : ""}</div></div></div>
+      </div></div>`;
   }
 
   function macroHtml(m) {
@@ -228,7 +249,6 @@
       <div class="sec-h"><h2>오늘의 TOP ${picks.length} 픽</h2><span class="muted small">총점 상위 🟢·🟡 종목 · 카드를 누르면 상세</span></div>
       <div class="picks">${picks.map(pickCard).join("") || '<p class="muted">현재 매수 등급 종목이 없습니다.</p>'}</div>
 
-      ${portfolioHtml()}
       <div class="sec-h" id="all"><h2>전체 순위</h2><span class="muted small" id="count"></span></div>
       <div class="filters">
         <input id="q" type="search" placeholder="종목명·코드·업종 검색" value="${esc(state.q)}">
@@ -759,8 +779,9 @@
         <li><b>저변동성</b> — 같은 조건이면 변동성이 낮은 종목을 우대(가격·위험 항목의 ${Math.round(C.price_risk.sub_weights.low_volatility * 100)}%)</li>
         <li><b>성장투자</b> — 이익이 늘어나는 기업(성장 ${w.growth})과 실적·수주 알파(${w.alpha})</li>
         <li><b>가치 가중</b> — 비중 ∝ 총점 × (1 + 안전마진) ÷ 변동성, 한 종목 최대 ${st.max_weight_pct}%</li>
-        <li><b>코어 & 새틀라이트</b> — 주식 몫의 ${Math.round(csat.core_ratio * 100)}%는 코어(시총 ${n0(csat.core_min_mcap_eok / 10000)}조↑·퀄리티 통과 상위 ${csat.core_size}), ${Math.round((1 - csat.core_ratio) * 100)}%는 새틀라이트(상위 ${csat.satellite_size})</li>
+        <li><b>코어 & 새틀라이트</b> — 코어 최대 ${csat.core_size}종목(시총 ${n0(csat.core_min_mcap_eok / 10000)}조↑·퀄리티 통과)에 주식 몫의 ${Math.round(csat.core_ratio * 100)}%, 한 종목 최대 ${st.max_weight_pct}% · 새틀라이트(중소형) 최대 ${csat.satellite_size}종목에 ${Math.round((1 - csat.core_ratio) * 100)}%, 한 종목 최대 ${csat.satellite_max_weight_pct}% — 단 🟢·총점 ${csat.boost_score}점↑ '진짜 개꿀'이면 ${Math.round(csat.boost_ratio * 100)}%·종목당 ${csat.boost_max_weight_pct}%까지 · 상한으로 남는 주식 몫은 지수 ETF</li>
         <li><b>정률투자</b> — 기본 주식 ${100 - cs.base_pct} : 현금 ${cs.base_pct}, 권장 비중에서 ±${cs.rebalance_band_pct}%p 벗어나면 리밸런싱</li>
+        <li><b>주식 외 자산(현금 몫)은 놀리지 않기</b> — 분할매수 2·3차 대기 자금은 CMA·파킹통장(바로 인출), 나머지는 단기채·금리형 ETF(KOFR·CD금리, 매일 이자) ${Math.round(cs.parking.base_split.short_bond * 100)}% · 국채 ETF ${Math.round(cs.parking.base_split.gov_bond * 100)}% · 현금성 ${Math.round(cs.parking.base_split.cash * 100)}% (한국 10년물 ${cs.parking.duration_kr10y}%↑이면 국채 비중 확대)</li>
         <li><b>절대모멘텀</b> — 코스피 12개월 수익률이 마이너스면 현금 +${cs.abs_momentum_adj}%p</li></ul></div>
       <div class="card"><h2>⚠️ 불안요소(매크로) 체크</h2><ul>
         <li>하이일드 스프레드 ≥ ${cs.macro.hy_spread_high}% → 현금 +${cs.macro.hy_spread_high_adj}%p, 1개월 +${cs.macro.hy_spread_jump}%p 이상 확대 → +${cs.macro.hy_spread_jump_adj}%p</li>

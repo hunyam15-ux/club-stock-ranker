@@ -93,6 +93,34 @@
       <circle r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="#26262d" stroke-width="${thick}"/>${segs}</g>${center}</svg>`;
   }
 
+  // ------------------------------------------------------------ 파이 차트 (호버 시 조각이 튀어나옴)
+  function pie(parts, size = 200, opts = {}) {
+    const tot = parts.reduce((a, p) => a + Math.max(0, p.value), 0) || 1;
+    const cx = size / 2, cy = size / 2, r = size / 2 - 8, hole = opts.hole || 0;
+    let a0 = -Math.PI / 2, out = "";
+    parts.filter((p) => p.value > 0).forEach((p, i) => {
+      const frac = p.value / tot, a1 = a0 + frac * 2 * Math.PI, mid = (a0 + a1) / 2;
+      const P = (a, rr) => [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
+      const large = a1 - a0 > Math.PI ? 1 : 0;
+      let d;
+      if (frac >= 0.9999) d = `M${cx - r},${cy}A${r},${r} 0 1 1 ${cx + r},${cy}A${r},${r} 0 1 1 ${cx - r},${cy}Z`;
+      else {
+        const [x0, y0] = P(a0, r), [x1, y1] = P(a1, r);
+        if (hole) {
+          const [h0x, h0y] = P(a0, hole), [h1x, h1y] = P(a1, hole);
+          d = `M${x0},${y0}A${r},${r} 0 ${large} 1 ${x1},${y1}L${h1x},${h1y}A${hole},${hole} 0 ${large} 0 ${h0x},${h0y}Z`;
+        } else d = `M${cx},${cy}L${x0},${y0}A${r},${r} 0 ${large} 1 ${x1},${y1}Z`;
+      }
+      const dx = Math.cos(mid) * 7, dy = Math.sin(mid) * 7;
+      const [lx, ly] = P(mid, hole ? (r + hole) / 2 : r * 0.62);
+      out += `<g class="pslice" style="--dx:${dx}px;--dy:${dy}px;animation-delay:${i * 60}ms" data-tip="${p.tip || p.label + " " + p.value.toFixed(1) + "%"}" ${p.href ? `data-href="${p.href}"` : ""}>
+        <path d="${d}" fill="${p.color}" stroke="#1c1c21" stroke-width="2"/>
+        ${frac >= 0.06 ? `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="${size < 180 ? 11 : 12.5}" font-weight="800" fill="#fff" pointer-events="none">${p.value.toFixed(0)}%</text>` : ""}</g>`;
+      a0 = a1;
+    });
+    return `<svg class="pie" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${out}${opts.center || ""}</svg>`;
+  }
+
   // ------------------------------------------------------------ 범위 막대 (1년 저점~고점 중 현재 위치)
   function rangeBar(lo, hi, v, opts = {}) {
     if (![lo, hi, v].every(isNum) || hi <= lo) return `<div class="rbar na"></div>`;
@@ -215,5 +243,5 @@
     requestAnimationFrame(step);
   }
 
-  window.Viz = { changeColor, scoreColor, sparkline, indexChart, donut, rangeBar, radar, gauge, squarify, Tip, countUp, UP, DOWN, FLAT };
+  window.Viz = { pie, changeColor, scoreColor, sparkline, indexChart, donut, rangeBar, radar, gauge, squarify, Tip, countUp, UP, DOWN, FLAT };
 })();
