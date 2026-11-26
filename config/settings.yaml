@@ -4,9 +4,19 @@ sheet:
   gid: 167757265          # 메인 탭
   # 시트는 '링크가 있는 모든 사용자: 뷰어' 공유 상태여야 CSV로 읽힙니다.
 
+# 분석 대상: 코스피·코스닥 전체 중 아래 조건을 통과한 보통주 (+ 모임 발표 종목은 항상 포함)
+universe:
+  min_mcap_eok: 1000          # 시가총액 1,000억 이상
+  min_trade_value_mil: 300    # 당일 거래대금 3억(=300백만원) 이상
+  exclude_preferred: true     # 우선주 제외
+  exclude_spac: true          # 스팩 제외
+  exclude_reits: false        # 리츠 포함
+  workers: 8                  # 동시 요청 수(네이버 부하 고려해 8 이하 권장)
+  min_listing: 1000           # 전체 목록이 이보다 적게 오면 비정상으로 보고 중단
+
 collect:
   daily_count: 300        # 차트용 일봉 개수(약 1년 + 여유)
   chart_days: 250         # 화면 차트에 쓰는 일수(1년)
   use_pykrx_fallback: true
   history_keep_days: 180  # 컨센서스 변화 추적용 스냅샷 보관 기간
-  min_price_coverage: 0.5 # 현재가를 못 가져온 종목이 50% 넘으면 갱신 중단(기존 데이터 유지)
+  min_price_coverage: 0.7 # 시세·차트를 못 가져온 종목이 30% 넘으면 갱신 중단(기존 데이터 유지)

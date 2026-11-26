@@ -86,3 +86,14 @@ def estimates_for(annual: dict, year: int) -> dict:
     res["turnaround_cur"] = (prev.get("eps") is not None and prev["eps"] <= 0
                              and cur.get("eps") is not None and cur["eps"] > 0)
     return res
+
+
+def parse_summary(js: dict) -> list[str]:
+    cs = js.get("corporationSummary") or {}
+    return [str(cs[k]).strip() for k in sorted(cs) if k.startswith("comment") and cs.get(k)]
+
+
+def fetch_finance(sess, code: str) -> tuple[dict, list[str]]:
+    """연간 재무·컨센서스 + 기업 개요 문장."""
+    js = get(sess, NAVER_ANNUAL.format(code=code)).json()
+    return parse_naver_annual(js), parse_summary(js)

@@ -43,7 +43,10 @@ def score_stock(s: dict, cfg: dict) -> dict:
     if s.get("price") and s.get("target"):
         up = (s["target"] / s["price"] - 1) * 100
     u = cfg["upside"]
-    comps["upside"] = {"score": lin_score(up, u["worst_pct"], u["best_pct"]), "value": up}
+    up_s = up
+    if up is not None and s.get("target_source") == "모델 적정가":
+        up_s = up * cfg.get("target", {}).get("model_upside_weight", 1.0)  # 추정 목표가는 할인 반영
+    comps["upside"] = {"score": lin_score(up_s, u["worst_pct"], u["best_pct"]), "value": up}
 
     # 2) 밸류에이션 ------------------------------------------------------
     v = cfg["valuation"]
@@ -155,6 +158,10 @@ def score_stock(s: dict, cfg: dict) -> dict:
     return result
 
 
+def target_label(src: str | None) -> str:
+    return {"컨센서스": "컨센서스 목표가", "모델 적정가": "모델 적정가", "모임": "모임 목표가"}.get(src or "", "목표가")
+
+
 def _f(x, d=0):
     return f"{x:+.{d}f}%"
 
@@ -165,12 +172,12 @@ def reason_line(s: dict, r: dict) -> str:
     pos, neg = [], []  # (강도, 문구)
     up = r["upside_pct"]
     if up is not None:
-        txt = f"{s.get('target_source') or ''} 목표가 대비 {_f(up)}".strip()
+        txt = f"{target_label(s.get('target_source'))} 대비 {_f(up)}"
         (pos if up >= 15 else neg).append((abs(up - 15) + 10, txt))
     pr = c["valuation"].get("per_ratio")
     if pr is not None:
         d = (1 - pr) * 100
-        txt = f"PER 섹터 평균 대비 {abs(d):.0f}% {'할인' if d >= 0 else '할증'}"
+        txt = f"PER 업종 대비 {abs(d):.0f}% {'할인' if d >= 0 else '할증'}"
         (pos if d >= 10 else neg if d <= -10 else []).append((abs(d), txt))
     elif s.get("per") is not None and s["per"] <= 0:
         neg.append((20, "적자(PER 산출 불가)"))
@@ -178,7 +185,7 @@ def reason_line(s: dict, r: dict) -> str:
     if br is not None:
         d = (1 - br) * 100
         if abs(d) >= 25:
-            (pos if d > 0 else neg).append((abs(d) * 0.6, f"PBR 섹터 대비 {abs(d):.0f}% {'할인' if d > 0 else '할증'}"))
+            (pos if d > 0 else neg).append((abs(d) * 0.6, f"PBR 업종 대비 {abs(d):.0f}% {'할인' if d > 0 else '할증'}"))
     g = c["momentum"].get("eps_growth")
     if s.get("turnaround"):
         pos.append((40, "흑자전환 예상"))

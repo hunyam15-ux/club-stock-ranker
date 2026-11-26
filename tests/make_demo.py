@@ -13,7 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from collector import consensus, main as M, market
+from collector import main as M
 
 from . import fake_sources as F
 
@@ -28,7 +28,7 @@ def demo_csv() -> str:
            '시가총액(억원/억달러)', 'PER', '차트(365일)', '52주 고가', '52주 저가', '차이']
     rows = [[''] * W, hdr]
     for i, sec in enumerate(SECTORS, 1):
-        code = f"{900000 + i * 7:06d}"
+        code = f"{900000 + i * 10:06d}"
         last = F.fake_daily(None, code)[-1][4]
         r = [''] * W
         r[0], r[1], r[2], r[3] = ["데모A", "데모B", "데모C"][i % 3], str(i), sec, f"데모종목{i:02d}"
@@ -52,8 +52,15 @@ def main(out: str):
     shutil.copytree(ROOT / "site", out, ignore=shutil.ignore_patterns("data"))
     text = demo_csv()
     M.fetch_csv = lambda *a, **k: text
-    market.fetch_daily, market.fetch_naver_summary, market.fetch_per = F.fake_daily, F.fake_summary, F.fake_per
-    consensus.fetch_naver_annual = F.fake_annual
+    F.patch(setattr)
+    real = M.load_yaml
+
+    def cfg(p):
+        d = real(p)
+        if p.name == "settings.yaml":
+            d["universe"]["min_listing"] = 10
+        return d
+    M.load_yaml = cfg
     assert M.main(["--out", str(out / "data")]) == 0
     p = out / "data" / "latest.json"
     d = json.loads(p.read_text(encoding="utf-8"))

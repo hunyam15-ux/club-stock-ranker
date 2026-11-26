@@ -6,10 +6,10 @@ on:
   workflow_dispatch:          # Actions 탭에서 수동 실행
   push:
     branches: [main]
-    paths: ["site/**", "config/**", "collector/**", ".github/workflows/**"]
+    paths: ["site/*.html", "site/*.js", "site/*.css", "config/**", "collector/**", ".github/workflows/update.yml"]
 
 permissions:
-  contents: write   # 수집 데이터 커밋(컨센서스 변화 추적용 스냅샷 보관)
+  contents: write   # 컨센서스 변화 추적용 스냅샷(site/data/history)만 커밋
   pages: write
   id-token: write
 
@@ -20,6 +20,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -34,22 +35,19 @@ jobs:
       - name: 테스트
         run: python -m pytest -q
 
-      # 코드·설정만 바뀐 push 에서는 수집하지 않고 기존 데이터로 다시 배포만 한다.
-      # (scoring.yaml 가중치를 바꾼 뒤 바로 반영하려면 Actions 에서 수동 실행)
-      - name: 데이터 수집 (시트 → 시세·실적·공시 → 점수)
-        if: github.event_name != 'push'
+      # 코스피·코스닥 전 종목 분석 (약 10~20분). 결과(latest.json, stock/*.json)는 커밋하지 않고 바로 배포한다.
+      - name: 데이터 수집 (시트 → 전 종목 → 점수·투자논리)
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: python -m collector.main
 
-      - name: 데이터 커밋
-        if: github.event_name != 'push'
+      - name: 스냅샷 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data
-          git diff --cached --quiet || git commit -m "data: $(TZ=Asia/Seoul date +%F) 갱신"
-          git push
+          git add site/data/history
+          git diff --cached --quiet || git commit -m "history: $(TZ=Asia/Seoul date +%F) 컨센서스 스냅샷"
+          git pull --rebase -q origin main && git push
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

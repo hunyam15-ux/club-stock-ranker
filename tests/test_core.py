@@ -94,7 +94,7 @@ BASE = dict(price=10000, target=14000, target_source="모임", per=8, pbr=0.8, f
 def test_score_good_stock_is_green():
     r = scoring.score_stock(BASE, CFG)
     assert r["grade"] == "green", r
-    assert "목표가 대비 +40%" in r["reason"]
+    assert "모임 목표가 대비 +40%" in r["reason"]
     assert r["coverage"] == 1.0
 
 

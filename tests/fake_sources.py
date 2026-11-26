@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SECTORS = ["반도체와반도체장비", "조선", "화장품", "자동차부품", "증권", "화학", "소프트웨어", "제약"]
 
 
 def _rng(code):
@@ -34,18 +35,39 @@ def fake_daily(sess, symbol, count=300):
     return rows
 
 
-def fake_summary(sess, code):
+def demo_codes(n=40):
+    return [f"{900000 + i * 10:06d}" for i in range(1, n + 1)]
+
+
+def fake_listing(sess, extra=("073010", "005930", "0088M0"), n=40):
+    out = []
+    for i, code in enumerate(list(extra) + demo_codes(n)):
+        r = _rng(code)
+        last = fake_daily(None, code)[-1][4]
+        out.append({"code": code, "name": f"데모종목{i:02d}", "market": r.choice(["코스피", "코스닥"]), "end_type": "stock",
+                    "price": round(last), "change_pct": r.uniform(-3, 3),
+                    "mcap_eok": r.choice([1500, 3000, 9000, 40000, 300000]),
+                    "trade_value_mil": r.choice([200, 1000, 50000]), "price_time": "2026-11-26T15:30:00+09:00",
+                    "trading": True})
+    out.append({"code": "069500", "name": "데모ETF", "end_type": "etf", "mcap_eok": 50000, "trade_value_mil": 9e5,
+                "price": 30000, "trading": True})
+    return out
+
+
+def fake_industries(sess):
+    return {c: SECTORS[i % len(SECTORS)] for i, c in enumerate(["073010", "005930", "0088M0"] + demo_codes())}
+
+
+def fake_summary(sess, code, with_basic=True):
     r = _rng(code)
     last = fake_daily(None, code)[-1][4]
-    return {"price": round(last), "change_pct": r.uniform(-3, 3), "price_time": "2026-11-26T15:30:00+09:00",
-            "mcap_eok": r.choice([800, 3000, 9000, 40000, 300000]), "per": r.choice([-5, 6, 9, 14, 22, 35]),
+    return {"price": round(last), "mcap_eok": 5000, "per": r.choice([-5, 6, 9, 14, 22, 35]),
             "pbr": r.choice([0.5, 0.9, 1.4, 2.5, 4.0]), "div_yield": r.choice([None, 0.5, 2.1, 4.0]),
-            "high52": None, "low52": None, "cons_target": round(last * r.uniform(0.85, 1.6), -2),
-            "market": "코스닥" if r.random() > 0.5 else "코스피",
-            "peer_codes": [f"{r.randint(100000, 999999)}" for _ in range(5)]}
+            "high52": None, "low52": None,
+            "cons_target": r.choice([None, round(last * r.uniform(0.85, 1.6), -2)]), "cons_date": "2026-11-25"}
 
 
-def fake_annual(sess, code):
+def fake_finance(sess, code):
     r = _rng(code)
     e = r.uniform(200, 5000)
     ann = {}
@@ -53,20 +75,20 @@ def fake_annual(sess, code):
         e *= 1 + r.uniform(-0.2, 0.45)
         ann[str(y)] = {"estimate": y >= 2026, "revenue": e * 300, "op_income": e * 30, "eps": e,
                        "roe": r.uniform(3, 20), "debt_ratio": r.choice([40, 90, 180, 320])}
-    return ann
+    return ann, ["(데모) 회사 개요 문장 1입니다.", "(데모) 주요 사업 설명 문장입니다."]
 
 
-def fake_per(sess, code):
-    return _rng(code).choice([None, 8.0, 11.0, 15.0, 24.0])
+def patch(setter):
+    """setter(module, name, value) 로 가짜 함수를 끼운다 (pytest monkeypatch.setattr 또는 setattr)."""
+    from collector import consensus, market, universe
+    setter(market, "fetch_daily", fake_daily)
+    setter(market, "fetch_naver_summary", fake_summary)
+    setter(consensus, "fetch_finance", fake_finance)
+    setter(universe, "fetch_listing", fake_listing)
+    setter(universe, "fetch_industries", fake_industries)
 
 
 def install(monkeypatch):
-    from collector import consensus, market, sheet
-
     csv_text = (ROOT / "tests" / "fixtures" / "sample_sheet.csv").read_text(encoding="utf-8")
     monkeypatch.setattr("collector.main.fetch_csv", lambda *a, **k: csv_text)
-    monkeypatch.setattr(market, "fetch_daily", fake_daily)
-    monkeypatch.setattr(market, "fetch_naver_summary", fake_summary)
-    monkeypatch.setattr(market, "fetch_per", fake_per)
-    monkeypatch.setattr(consensus, "fetch_naver_annual", fake_annual)
-    _ = sheet
+    patch(monkeypatch.setattr)

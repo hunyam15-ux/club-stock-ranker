@@ -76,8 +76,17 @@ def _pick(infos: dict[str, str], *names):
     return None
 
 
-def fetch_naver_summary(sess, code: str) -> dict:
-    """현재가·시총·PER·PBR·배당수익률·52주 고저·컨센서스 목표가 등."""
+def fetch_naver_summary(sess, code: str, with_basic: bool = True) -> dict:
+    """현재가·시총·PER·PBR·배당수익률·52주 고저·컨센서스 목표가 등.
+    with_basic=False 면 현재가 조회(basic)를 생략한다(전체 목록에서 이미 받은 경우)."""
+    out: dict = {}
+    if with_basic:
+        out.update(_fetch_basic(sess, code))
+    out.update(_fetch_integration(sess, code))
+    return out
+
+
+def _fetch_basic(sess, code: str) -> dict:
     out: dict = {}
     try:
         b = get(sess, NAVER_BASIC.format(code=code)).json()
@@ -89,7 +98,11 @@ def fetch_naver_summary(sess, code: str) -> dict:
         out["stock_type"] = b.get("stockEndType")  # 'stock' / 'etf' 등
     except Exception as e:  # noqa: BLE001
         log.warning("%s 네이버 basic 실패: %s", code, e)
+    return out
 
+
+def _fetch_integration(sess, code: str) -> dict:
+    out: dict = {}
     try:
         js = get(sess, NAVER_INTEGRATION.format(code=code)).json()
         infos = _total_infos(js)

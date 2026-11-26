@@ -1,11 +1,13 @@
-/* 모임 매수 순위 — 정적 SPA (해시 라우팅). 데이터: data/latest.json, data/prices/{code}.json */
+/* 매수 레이더 — 정적 SPA (해시 라우팅)
+   데이터: data/latest.json (전 종목 요약), data/stock/{code}.json (종목 상세 + 1년 일봉) */
 (() => {
   "use strict";
   const $app = document.getElementById("app");
   const $status = document.getElementById("status");
   let DATA = null;
-  const priceCache = {};
-  const state = { sort: "rank", dir: 1, sector: "", grades: new Set(), mcap: "", q: "" };
+  const detailCache = {};
+  const state = { sort: "rank", dir: 1, sector: "", market: "", grades: new Set(), mcap: "", q: "", club: false, shown: 50 };
+  const TOP_N = 10;
 
   // ------------------------------------------------------------ 포맷
   const NA = '<span class="na">N/A</span>';
@@ -30,8 +32,11 @@
   const gradeBadge = (s) => `<span class="g g-${s.score.grade}">${s.score.grade_emoji} ${esc(s.score.grade_label)}</span>`;
   const gradeShort = { green: "🟢 개꿀", yellow: "🟡 분할매수", white: "⚪ 관망", red: "🔴 비싸다" };
   const bar = (v) => `<span class="bar"><i style="width:${isNum(v) ? Math.max(0, Math.min(100, v)) : 0}%"></i></span>`;
+  const tlabel = (src) => ({ "컨센서스": "컨센서스 목표가", "모델 적정가": "모델 적정가", "모임": "모임 목표가" }[src] || "목표가");
+  const li = (arr, empty) => (arr && arr.length ? `<ul class="blist">${arr.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="muted small">${empty}</p>`);
+  const clubTag = (s) => (s.club ? `<span class="tag club">모임 발표</span>` : "");
 
-  // ------------------------------------------------------------ 데이터 로드
+  // ------------------------------------------------------------ 데이터
   async function load() {
     try {
       const r = await fetch("data/latest.json", { cache: "no-store" });
@@ -40,62 +45,91 @@
     } catch (e) {
       $status.innerHTML = "";
       $app.innerHTML = `<div class="card sec" style="margin-top:16px"><h2>아직 수집된 데이터가 없습니다</h2>
-        <p class="muted">GitHub 저장소의 <b>Actions → 데이터 갱신 및 배포 → Run workflow</b>를 한 번 실행하면 데이터가 채워집니다. (README 참고)</p></div>`;
+        <p class="muted">GitHub 저장소의 <b>Actions → 데이터 갱신 및 배포 → Run workflow</b>를 실행하면 데이터가 채워집니다.</p></div>`;
       return false;
     }
     return true;
   }
-
-  async function prices(code) {
-    if (priceCache[code]) return priceCache[code];
-    const r = await fetch(`data/prices/${code}.json`, { cache: "no-store" });
-    if (!r.ok) throw new Error("no chart");
-    return (priceCache[code] = (await r.json()).rows);
+  async function detail(code) {
+    if (detailCache[code]) return detailCache[code];
+    const r = await fetch(`data/stock/${code}.json`, { cache: "no-store" });
+    if (!r.ok) throw new Error("no detail");
+    return (detailCache[code] = await r.json());
   }
 
-  // ------------------------------------------------------------ 상단 상태 영역
+  // ------------------------------------------------------------ 상단 요약
   function renderStatus() {
-    const m = DATA.meta, c = m.cash || {}, gc = m.grade_counts || {};
-    const mk = m.market;
+    const m = DATA.meta, c = m.cash || {}, gc = m.grade_counts || {}, mk = m.market, u = m.universe || {};
     const trendCls = c.trend_state === "above_both" ? "up" : c.trend_state === "below_both" ? "down" : "";
     let warn = "";
     if (m.demo) warn += `<div class="banner err">⚠️ 화면 확인용 <b>데모 데이터</b>입니다. 실제 시세가 아닙니다.</div>`;
-    if (!m.dart_enabled) warn += `<div class="banner">DART API 키가 설정되지 않아 확정 실적·희석 물량·대주주 지분은 N/A로 표시됩니다.</div>`;
+    if (!m.dart_enabled) warn += `<div class="banner">DART API 키가 없어 희석 물량·대주주 지분은 N/A로 표시됩니다.</div>`;
     const cp = isNum(c.cash_pct) ? c.cash_pct : null;
     $status.innerHTML = `<div class="hero">
       <div><div class="k">권장 현금 비중</div><div class="v">${cp !== null ? cp.toFixed(0) + "%" : "N/A"}</div>
-        <div class="cashbar" title="주식 ${cp !== null ? 100 - cp : "-"}% / 현금 ${cp ?? "-"}%"><i style="width:${cp ?? 0}%"></i></div>
-        <div class="s">주식 ${cp !== null ? (100 - cp).toFixed(0) : "-"}% · 현금 ${cp !== null ? cp.toFixed(0) : "-"}%</div></div>
+        <div class="cashbar"><i style="width:${cp ?? 0}%"></i></div>
+        <div class="s">주식 ${cp !== null ? (100 - cp).toFixed(0) : "-"}% (상위 ${c.portfolio_size ?? "-"}종목) · 현금 ${cp !== null ? cp.toFixed(0) : "-"}%</div></div>
       <div><div class="k">코스피</div><div class="v">${mk ? n0(mk.last) : "N/A"}</div>
         <div class="s ${trendCls}">${esc((c.trend_desc || "").replace("코스피 ", ""))}</div></div>
-      <div><div class="k">데이터 갱신</div><div class="v sm">${esc(String(m.generated_at || "").replace(" KST", ""))}</div>
-        <div class="s">시세 ${esc(m.price_as_of || "N/A")} · ${m.sheet?.stocks ?? "-"}종목</div></div>
+      <div><div class="k">분석 종목</div><div class="v">${n0(u.analyzed)}<span class="unit">개</span></div>
+        <div class="s">코스피·코스닥 ${n0(u.listed)}개 중 · ${esc(String(m.generated_at || "").replace(" KST", ""))} 갱신</div></div>
       <div><div class="k">등급 분포</div><div class="gcounts">
         ${["green", "yellow", "white", "red"].map((g) => `<span class="g g-${g}">${gradeShort[g]} ${gc[g] ?? 0}</span>`).join("")}</div></div>
     </div>${warn}`;
   }
 
-  // ------------------------------------------------------------ 순위(메인)
-  const MCAP = [
-    ["", "시총 전체"], ["0-1000", "1천억 미만"], ["1000-5000", "1천억~5천억"], ["5000-10000", "5천억~1조"],
-    ["10000-100000", "1조~10조"], ["100000-1e12", "10조 이상"],
-  ];
-  const COLS = [
-    ["rank", "순위", "l"], ["name", "종목", "l"], ["grade", "등급", "l"], ["total", "총점"], ["price", "현재가"],
-    ["upside", "업사이드"], ["per", "PER"], ["pbr", "PBR"], ["fwd_per", "Fwd PER"], ["mcap", "시총"],
-    ["weight", "권장 비중"], ["reason", "판단 근거", "l"],
-  ];
+  // ------------------------------------------------------------ TOP 픽 카드
+  function pickCard(s) {
+    const sc = s.score, t = s.thesis || {}, pl = s.plan || {};
+    return `<article class="pick" data-code="${esc(s.code)}">
+      <header class="pick-h">
+        <div class="pick-title"><span class="rkb">${s.rank}</span>
+          <div><h3>${esc(s.name)} ${clubTag(s)}</h3><div class="tiny muted">${esc(s.code)} · ${esc(s.market || "")}</div></div></div>
+        <div class="pick-price"><b>${won(s.price)}</b><span class="tiny">${sgn(s.change_pct, 2)}</span></div>
+      </header>
+      <div class="pick-verdict">${gradeBadge(s)}<span class="score-big">${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}<small>점</small></span>
+        <span class="tiny muted">${esc(sc.reason)}</span></div>
+      <div class="boxes">
+        <section class="box">
+          <div class="box-t">🏢 어떤 회사?</div>
+          <div class="chips-s"><span class="tag">${esc(s.sector)}</span><span class="tag">시총 ${eok(s.mcap_eok)}</span>${s.club_sector ? `<span class="tag">모임 섹터: ${esc(s.club_sector)}</span>` : ""}</div>
+          <p class="desc">${s.summary && s.summary.length ? esc(s.summary.join(" ")) : '<span class="muted">회사 소개 정보 없음</span>'}</p>
+        </section>
+        <section class="box good">
+          <div class="box-t">💡 왜 사야 하나</div>${li((t.ideas || []).slice(0, 4), "뚜렷한 매수 근거가 데이터상 부족합니다.")}
+        </section>
+        <section class="box bad">
+          <div class="box-t">⚠️ 리스크</div>${li((t.risks || []).slice(0, 3), "데이터상 큰 리스크 신호 없음 (공시·뉴스는 직접 확인)")}
+        </section>
+        <section class="box">
+          <div class="box-t">🎯 목표가 · 매매</div>
+          <div class="tp"><div><span class="k">${esc(tlabel(s.target_source))}</span><b>${won(s.target)}</b><span>${sgn(sc.upside_pct, 0)}</span></div>
+            <div><span class="k">1차 매수</span><b>${won(pl.entry1)}</b></div>
+            <div><span class="k">손절</span><b class="down">${won(pl.stop)}</b></div>
+            <div><span class="k">권장 비중</span><b>${(s.weight_pct || 0).toFixed(1)}%</b></div></div>
+          <p class="tiny muted" style="margin:8px 0 0">${esc((t.target_basis || [])[0] || "")}</p>
+        </section>
+      </div>
+      <a class="more" href="#/stock/${esc(s.code)}">차트 · 실적 · 매매 전략 자세히 보기 →</a>
+    </article>`;
+  }
+
+  // ------------------------------------------------------------ 메인
+  const MCAP = [["", "시총 전체"], ["0-3000", "3천억 미만"], ["3000-10000", "3천억~1조"], ["10000-50000", "1조~5조"], ["50000-1e12", "5조 이상"]];
+  const COLS = [["rank", "순위", "l"], ["name", "종목", "l"], ["grade", "등급", "l"], ["total", "총점"], ["price", "현재가"],
+    ["upside", "업사이드"], ["per", "PER"], ["pbr", "PBR"], ["fwd_per", "Fwd PER"], ["mcap", "시총"], ["reason", "판단 근거", "l"]];
   const gOrder = { green: 0, yellow: 1, white: 2, red: 3 };
   const sortVal = {
     rank: (s) => s.rank, name: (s) => s.name, grade: (s) => gOrder[s.score.grade] * 1000 - (s.score.total ?? 0),
     total: (s) => s.score.total, price: (s) => s.price, upside: (s) => s.score.upside_pct, per: (s) => s.per,
-    pbr: (s) => s.pbr, fwd_per: (s) => s.fwd_per, mcap: (s) => s.mcap_eok, weight: (s) => s.weight_pct,
-    reason: (s) => s.score.reason,
+    pbr: (s) => s.pbr, fwd_per: (s) => s.fwd_per, mcap: (s) => s.mcap_eok, reason: (s) => s.score.reason,
   };
 
   function filtered() {
     let L = DATA.stocks.slice();
     if (state.sector) L = L.filter((s) => s.sector === state.sector);
+    if (state.market) L = L.filter((s) => s.market === state.market);
+    if (state.club) L = L.filter((s) => s.club);
     if (state.grades.size) L = L.filter((s) => state.grades.has(s.score.grade));
     if (state.mcap) {
       const [a, b] = state.mcap.split("-").map(Number);
@@ -119,54 +153,73 @@
 
   function renderRank() {
     const sectors = [...new Set(DATA.stocks.map((s) => s.sector))].sort((a, b) => a.localeCompare(b, "ko"));
+    const picks = DATA.stocks.filter((s) => s.score.grade === "green" || s.score.grade === "yellow").slice(0, TOP_N);
+    const clubN = DATA.stocks.filter((s) => s.club).length;
     $app.innerHTML = `
+      <div class="sec-h"><h2>오늘의 TOP ${picks.length} 픽</h2><span class="muted small">점수 상위 🟢·🟡 종목 · 카드를 누르면 상세</span></div>
+      <div class="picks">${picks.map(pickCard).join("") || '<p class="muted">현재 매수 등급 종목이 없습니다.</p>'}</div>
+
+      <div class="sec-h" id="all"><h2>전체 순위</h2><span class="muted small" id="count"></span></div>
       <div class="filters">
-        <input id="q" type="search" placeholder="종목명·코드 검색" value="${esc(state.q)}">
-        <select id="sector"><option value="">섹터 전체</option>${sectors.map((s) => `<option ${s === state.sector ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+        <input id="q" type="search" placeholder="종목명·코드·업종 검색" value="${esc(state.q)}">
+        <select id="sector"><option value="">업종 전체</option>${sectors.map((s) => `<option ${s === state.sector ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+        <select id="market"><option value="">시장 전체</option>${["코스피", "코스닥"].map((m) => `<option ${m === state.market ? "selected" : ""}>${m}</option>`).join("")}</select>
         <select id="mcap">${MCAP.map(([v, l]) => `<option value="${v}" ${v === state.mcap ? "selected" : ""}>${l}</option>`).join("")}</select>
-        <div class="chips">${["green", "yellow", "white", "red"].map((g) => `<button class="chip ${state.grades.has(g) ? "on" : ""}" data-g="${g}">${gradeShort[g]}</button>`).join("")}</div>
-        <span class="count" id="count"></span>
+        <div class="chips">${["green", "yellow", "white", "red"].map((g) => `<button class="chip ${state.grades.has(g) ? "on" : ""}" data-g="${g}">${gradeShort[g]}</button>`).join("")}
+          <button class="chip ${state.club ? "on" : ""}" id="clubchip">모임 발표 ${clubN}</button></div>
       </div>
       <div class="card"><div class="tbl-wrap"><table class="rank"><thead><tr>
         ${COLS.map(([k, l, a]) => `<th class="${a || ""}" data-k="${k}">${l} <span class="arr">${state.sort === k ? (state.dir > 0 ? "▲" : "▼") : ""}</span></th>`).join("")}
       </tr></thead><tbody id="tb"></tbody></table></div><div class="mlist" id="ml"></div></div>
-      <p class="tiny muted" style="margin-top:8px">업사이드 = (목표가 − 현재가) ÷ 현재가. 목표가는 ${DATA.meta.config.upside.target_source === "consensus_first" ? "컨센서스 우선" : DATA.meta.config.upside.target_source === "average" ? "모임·컨센서스 평균" : "모임 목표가 우선, 없으면 컨센서스"}. 행을 누르면 상세 화면으로 이동합니다.</p>`;
+      <div class="morebar"><button class="chip" id="showmore">50개 더 보기</button></div>
+      <p class="tiny muted">목표가 = 증권사 컨센서스 → 없으면 모델 적정가(업종 중앙 PER × 예상 EPS × ${DATA.meta.config.target.model_haircut}) → 모임 목표가 순.
+        업사이드 = (목표가 − 현재가) ÷ 현재가.</p>`;
+    $app.querySelectorAll(".pick").forEach((el) => el.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      location.hash = `#/stock/${el.dataset.code}`;
+    }));
     const draw = () => {
       const L = filtered();
-      document.getElementById("count").textContent = `${L.length}종목`;
-      document.getElementById("tb").innerHTML = L.map(rowHtml).join("") || `<tr><td colspan="12" class="l muted">조건에 맞는 종목이 없습니다.</td></tr>`;
-      document.getElementById("ml").innerHTML = L.map(cardHtml).join("") || `<p class="sec muted">조건에 맞는 종목이 없습니다.</p>`;
+      const V = L.slice(0, state.shown);
+      document.getElementById("count").textContent = `${L.length}종목 중 ${V.length}개 표시`;
+      document.getElementById("tb").innerHTML = V.map(rowHtml).join("") || `<tr><td colspan="11" class="l muted">조건에 맞는 종목이 없습니다.</td></tr>`;
+      document.getElementById("ml").innerHTML = V.map(cardHtml).join("") || `<p class="sec muted">조건에 맞는 종목이 없습니다.</p>`;
+      document.getElementById("showmore").style.display = L.length > V.length ? "" : "none";
     };
+    const reset = () => { state.shown = 50; draw(); };
     draw();
-    $app.querySelector("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); draw(); });
-    $app.querySelector("#sector").addEventListener("change", (e) => { state.sector = e.target.value; draw(); });
-    $app.querySelector("#mcap").addEventListener("change", (e) => { state.mcap = e.target.value; draw(); });
-    $app.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+    $app.querySelector("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); reset(); });
+    $app.querySelector("#sector").addEventListener("change", (e) => { state.sector = e.target.value; reset(); });
+    $app.querySelector("#market").addEventListener("change", (e) => { state.market = e.target.value; reset(); });
+    $app.querySelector("#mcap").addEventListener("change", (e) => { state.mcap = e.target.value; reset(); });
+    $app.querySelector("#clubchip").addEventListener("click", (e) => { state.club = !state.club; e.target.classList.toggle("on"); reset(); });
+    $app.querySelector("#showmore").addEventListener("click", () => { state.shown += 50; draw(); });
+    $app.querySelectorAll(".chip[data-g]").forEach((b) => b.addEventListener("click", () => {
       const g = b.dataset.g; state.grades.has(g) ? state.grades.delete(g) : state.grades.add(g);
-      b.classList.toggle("on"); draw();
+      b.classList.toggle("on"); reset();
     }));
     $app.querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
       const k = th.dataset.k;
       if (state.sort === k) state.dir *= -1;
-      else { state.sort = k; state.dir = ["total", "upside", "weight", "mcap"].includes(k) ? -1 : 1; }
-      renderRank();
+      else { state.sort = k; state.dir = ["total", "upside", "mcap"].includes(k) ? -1 : 1; }
+      const y = window.scrollY; renderRank(); window.scrollTo(0, y);
     }));
     $app.querySelector("#tb").addEventListener("click", (e) => {
       const tr = e.target.closest("tr[data-code]"); if (tr) location.hash = `#/stock/${tr.dataset.code}`;
     });
+    if (state.jumpAll) { state.jumpAll = false; document.getElementById("all").scrollIntoView(); }
   }
 
   function rowHtml(s) {
     const sc = s.score;
     return `<tr data-code="${esc(s.code)}">
       <td class="l rk ${s.rank <= 3 ? "rk1" : ""}">${s.rank}</td>
-      <td class="l nm">${esc(s.name)}<small>${esc(s.code)} · ${esc(s.sector)}</small></td>
+      <td class="l nm">${esc(s.name)} ${clubTag(s)}<small>${esc(s.code)} · ${esc(s.sector)}</small></td>
       <td class="l">${gradeBadge(s)}</td>
       <td><span class="score"><b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b>${bar(sc.total)}</span></td>
       <td>${won(s.price)}<div class="tiny">${sgn(s.change_pct, 2)}</div></td>
       <td>${sgn(sc.upside_pct, 0)}<div class="tiny muted">${esc(s.target_source || "")}</div></td>
       <td>${perf(s.per)}</td><td>${x1(s.pbr, "")}</td><td>${perf(s.fwd_per)}</td><td>${eok(s.mcap_eok)}</td>
-      <td>${s.weight_pct ? s.weight_pct.toFixed(1) + "%" : '<span class="muted">0%</span>'}</td>
       <td class="reason">${esc(sc.reason)}</td></tr>`;
   }
 
@@ -176,126 +229,109 @@
       <div class="mrow"><div class="mname"><span class="rk ${s.rank <= 3 ? "rk1" : ""}">${s.rank}</span>
           <div><b>${esc(s.name)}</b><span class="tiny">${esc(s.sector)} · ${esc(s.code)}</span></div></div>
         <div class="mprice"><b>${won(s.price)}</b><span class="tiny">${sgn(s.change_pct, 2)}</span></div></div>
-      <div class="mstats">${gradeBadge(s)}<span>총점 <b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b></span>
-        <span>업사이드 ${sgn(sc.upside_pct, 0)}</span><span>PER <b>${perf(s.per)}</b></span><span>비중 <b>${(s.weight_pct || 0).toFixed(1)}%</b></span></div>
+      <div class="mstats">${gradeBadge(s)}${clubTag(s)}<span>총점 <b>${isNum(sc.total) ? sc.total.toFixed(0) : "N/A"}</b></span>
+        <span>업사이드 ${sgn(sc.upside_pct, 0)}</span><span>PER <b>${perf(s.per)}</b></span></div>
       <div class="reason">${esc(sc.reason)}</div></a>`;
   }
 
   // ------------------------------------------------------------ 상세
   async function renderStock(code) {
-    const s = DATA.stocks.find((x) => x.code === code);
-    if (!s) { $app.innerHTML = `<p class="loading">종목을 찾을 수 없습니다. <a href="#/">순위로</a></p>`; return; }
-    const sc = s.score, c = sc.components, est = s.est || {}, pl = s.plan;
+    $app.innerHTML = `<p class="loading">불러오는 중…</p>`;
+    let s;
+    try { s = await detail(code); } catch (e) {
+      $app.innerHTML = `<p class="loading">종목 데이터를 찾을 수 없습니다. <a href="#/">순위로</a></p>`; return;
+    }
+    const sc = s.score, c = sc.components, est = s.est || {}, pl = s.plan, t = s.thesis || {};
     const yr = est.year;
     const comp = (k, l) => {
       const v = c[k]?.score;
-      return `<div class="comp"><span>${l} <span class="tiny muted">×${c[k]?.weight ?? 0}</span></span>${bar(v)}<b class="num" style="text-align:right">${isNum(v) ? v.toFixed(0) : "N/A"}</b></div>`;
+      return `<div class="comp"><span>${l} <span class="tiny muted">×${c[k]?.weight ?? 0}</span></span>${bar(v)}<b class="num">${isNum(v) ? v.toFixed(0) : "N/A"}</b></div>`;
     };
     const pd = sc.penalty_detail || {};
-    const dart = s.dart || {};
-    const dil = dart.dilution;
-    const fin = dart.financials || {};
+    const dart = s.dart || {}, dil = dart.dilution, fin = dart.financials || {};
     const yrow = (label, key, unit) => {
       const cell = (o) => (o && isNum(o[key]) ? (unit === "won" ? n0(o[key]) : eok(o[key])) : NA);
-      return `<tr><td>${label}</td><td>${cell(est.prev)}</td><td>${cell(est.cur)}${est.cur?.estimate ? "" : ""}</td>
+      return `<tr><td>${label}</td><td>${cell(est.prev)}</td><td>${cell(est.cur)}</td>
         <td>${sgn(est[key + "_g_cur"], 0)}</td><td>${cell(est.next)}</td><td>${sgn(est[key + "_g_next"], 0)}</td></tr>`;
     };
     const tag = (o) => (o && Object.keys(o).length ? (o.estimate ? '<span class="pill">E</span>' : '<span class="pill">확정</span>') : "");
+    const sh = s.sheet || {};
 
     $app.innerHTML = `
       <a class="back" href="#/">← 매수 순위</a>
       <div class="card">
         <div class="dhead">
-          <div><h1>${esc(s.name)}</h1>
-            <div class="meta">${esc(s.code)} · ${esc(s.market || "")} · 섹터 ${esc(s.sector)} · ${s.rank}위${s.is_etf ? " · ETF" : ""}</div></div>
+          <div><h1>${esc(s.name)} ${clubTag(s)}</h1>
+            <div class="meta">${esc(s.code)} · ${esc(s.market || "")} · ${esc(s.sector)} · ${s.rank}위</div></div>
           <div class="dprice"><div class="p">${won(s.price)}</div>
-            <div>${sgn(s.change_pct, 2)} <span class="tiny muted">${esc(String(s.price_time || "").replace("T", " ").slice(0, 16))} · ${esc(s.sources?.price || "")}</span></div></div>
+            <div>${sgn(s.change_pct, 2)} <span class="tiny muted">${esc(String(s.price_time || "").replace("T", " ").slice(0, 16))}</span></div></div>
         </div>
         <div class="verdict">${gradeBadge(s)}<span class="tot">${isNum(sc.total) ? sc.total.toFixed(1) : "N/A"}점</span><span class="why">${esc(sc.reason)}</span></div>
       </div>
 
-      <div class="grid2">
-        <div class="card sec"><h2>점수 구성 <span class="muted">데이터 충족률 ${(sc.coverage * 100).toFixed(0)}%</span></h2>
+      <div class="boxes big">
+        <section class="box"><div class="box-t">🏢 어떤 회사?</div>
+          <div class="chips-s"><span class="tag">${esc(s.sector)}</span><span class="tag">${esc(s.market || "")}</span><span class="tag">시총 ${eok(s.mcap_eok)}</span></div>
+          ${s.summary && s.summary.length ? `<ul class="blist">${s.summary.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : '<p class="muted small">회사 소개 정보 없음</p>'}</section>
+        <section class="box good"><div class="box-t">💡 왜 사야 하나 <span class="muted tiny">투자아이디어</span></div>${li(t.ideas, "뚜렷한 매수 근거가 데이터상 부족합니다.")}</section>
+        <section class="box bad"><div class="box-t">⚠️ 리스크 <span class="muted tiny">Risk</span></div>${li(t.risks, "데이터상 큰 리스크 신호 없음 (공시·뉴스는 직접 확인)")}</section>
+        <section class="box"><div class="box-t">🎯 목표가 근거</div>
+          <div class="tp"><div><span class="k">${esc(tlabel(s.target_source))}</span><b>${won(s.target)}</b><span>${sgn(sc.upside_pct, 1)}</span></div></div>
+          ${li(t.target_basis, "목표가 산출 불가")}</section>
+        <section class="box"><div class="box-t">🔍 체크포인트 <span class="muted tiny">주가희석요소 · 경영진</span></div>${li(t.checks, "")}
+          ${dil?.events?.length ? `<table class="mini" style="margin-top:8px"><thead><tr><th>공시일</th><th>종류</th><th>주식총수 대비</th></tr></thead><tbody>
+            ${dil.events.slice(0, 6).map((e) => `<tr><td><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${esc(e.rcept_no)}" target="_blank" rel="noopener">${esc(e.date)}</a></td><td>${esc(e.type)}</td><td>${p1(e.pct_of_shares)}</td></tr>`).join("")}</tbody></table>` : ""}</section>
+        <section class="box"><div class="box-t">📊 점수 구성 <span class="muted tiny">충족률 ${(sc.coverage * 100).toFixed(0)}%</span></div>
           ${comp("upside", "업사이드")}${comp("valuation", "밸류에이션")}${comp("momentum", "실적 모멘텀")}${comp("price_position", "가격 위치")}
-          <div class="comp"><span>리스크 감점</span><span class="small muted">희석 ${pd.dilution ?? "N/A"} · 부채 ${pd.debt ?? "N/A"} · 메모 ${pd.memo ?? 0}</span><b class="num down" style="text-align:right">−${sc.penalty}</b></div>
-          <p class="tiny muted" style="margin:6px 0 0">가중평균 ${sc.base ?? "N/A"}점 − 감점 ${sc.penalty}점 = 총점. 데이터가 없는 항목은 제외하고 나머지 가중치로 계산.</p>
-        </div>
-        <div class="card sec"><h2>목표가 · 업사이드</h2>
-          <div class="kv">
-            <div><div class="k">적용 목표가</div><div class="v">${won(s.target)}</div><div class="x">${esc(s.target_source || "없음")}</div></div>
-            <div><div class="k">업사이드</div><div class="v">${sgn(sc.upside_pct, 1)}</div></div>
-            <div><div class="k">모임 목표가</div><div class="v">${won(s.target_club)}</div></div>
-            <div><div class="k">컨센서스 목표가</div><div class="v">${won(s.target_cons)}</div><div class="x">${esc(s.cons_date || "")}</div></div>
-          </div>
-          <h2 style="margin-top:16px">모임 발표 이력</h2>
-          <table class="mini"><thead><tr><th>발표일</th><th>발표자</th><th>발표일 주가</th><th>목표가</th><th>이후 수익률</th></tr></thead><tbody>
-            ${(s.pitches || []).map((p) => `<tr><td>${esc(p.date || "N/A")}</td><td>${esc(p.presenter || "N/A")}</td><td>${won(p.price_at_pitch)}</td>
-              <td>${p.target ? won(p.target) : esc(p.target_raw || "N/A")}</td><td>${sgn(p.return_since, 1)}</td></tr>`).join("")}
-          </tbody></table>
-        </div>
+          <div class="comp"><span>리스크 감점</span><span class="tiny muted">희석 ${pd.dilution ?? "N/A"} · 부채 ${pd.debt ?? "N/A"} · 메모 ${pd.memo ?? 0}</span><b class="num down">−${sc.penalty}</b></div></section>
       </div>
 
       <div class="card sec" style="margin-top:12px"><h2>주요 지표</h2>
         <div class="kv">
-          <div><div class="k">시가총액</div><div class="v">${eok(s.mcap_eok)}</div><div class="x">${esc(s.sources?.mcap || "")}</div></div>
-          <div><div class="k">PER (Trailing)</div><div class="v">${perf(s.per)}</div><div class="x">비교 ${x1(s.bench?.per)} · ${esc(s.bench?.per_src || "")}</div></div>
-          <div><div class="k">PBR</div><div class="v">${x1(s.pbr, "배")}</div><div class="x">비교 ${x1(s.bench?.pbr)} · ${esc(s.bench?.pbr_src || "")}</div></div>
+          <div><div class="k">PER (Trailing)</div><div class="v">${perf(s.per)}</div><div class="x">업종 ${x1(s.bench?.per)} · ${esc(s.bench?.per_src || "")}</div></div>
+          <div><div class="k">PBR</div><div class="v">${x1(s.pbr, "배")}</div><div class="x">업종 ${x1(s.bench?.pbr)} · ${esc(s.bench?.pbr_src || "")}</div></div>
           <div><div class="k">Forward PER</div><div class="v">${perf(s.fwd_per)}</div><div class="x">${esc(s.fwd_basis || "")}</div></div>
           <div><div class="k">ROE</div><div class="v">${p1(s.roe)}</div><div class="x">최근 연간</div></div>
           <div><div class="k">배당수익률</div><div class="v">${p1(s.div_yield)}</div></div>
           <div><div class="k">52주 고가 / 저가</div><div class="v">${n0(s.high52)} / ${n0(s.low52)}</div><div class="x">범위 내 위치 ${isNum(s.range_pos) ? (s.range_pos * 100).toFixed(0) + "%" : "N/A"}</div></div>
-          <div><div class="k">수익률 1W · 1M · 3M</div><div class="v small">${sgn(s.ret_1w)} · ${sgn(s.ret_1m)} · ${sgn(s.ret_3m)}</div><div class="x">6M ${sgn(s.ret_6m)} · 12M ${sgn(s.ret_12m)}</div></div>
-          <div><div class="k">변동성(60일, 연율)</div><div class="v">${p1(s.vol_annual)}</div></div>
-          <div><div class="k">부채비율</div><div class="v">${p1(s.debt_ratio)}</div><div class="x">${esc(s.debt_basis || "")}</div></div>
+          <div><div class="k">수익률 1M · 3M</div><div class="v small">${sgn(s.ret_1m)} · ${sgn(s.ret_3m)}</div><div class="x">6M ${sgn(s.ret_6m)} · 12M ${sgn(s.ret_12m)}</div></div>
+          <div><div class="k">부채비율</div><div class="v">${p1(s.debt_ratio)}</div><div class="x">${esc(s.debt_basis || "")}${s.is_financial ? " · 금융업은 감점 제외" : ""}</div></div>
+          <div><div class="k">변동성(60일)</div><div class="v">${p1(s.vol_annual)}</div></div>
           <div><div class="k">컨센서스 변화</div><div class="v">${sgn(s.revision_pct)}</div><div class="x">${esc(s.revision_basis || "과거 스냅샷 누적 중")}</div></div>
-          <div><div class="k">최대주주 지분</div><div class="v">${p1(dart.holder?.pct)}</div><div class="x">${esc(dart.holder?.name || "")} ${esc(dart.holder?.basis || "")}</div></div>
+          <div><div class="k">최대주주 지분</div><div class="v">${p1(dart.holder?.pct)}</div><div class="x">${esc(dart.holder?.basis || (dart.enabled ? "상위 종목만 조회" : ""))}</div></div>
+          <div><div class="k">컨센서스 목표가</div><div class="v">${won(s.target_cons)}</div><div class="x">${esc(s.cons_date || "커버리지 없음")}</div></div>
         </div>
       </div>
 
       <div class="card sec" style="margin-top:12px"><h2>52주 차트 <span class="muted">일봉 · 상승 빨강 / 하락 파랑</span></h2>
-        <div class="chart-box" id="chart"><p class="muted small">차트 불러오는 중…</p></div>
+        <div class="chart-box" id="chart"></div>
         <div class="legend"><span><i style="border-color:#2fca73;border-top-style:dashed"></i>목표가</span><span><i style="border-color:#d1d6db"></i>분할매수가</span>
           <span><i style="border-color:#8fb8ff;border-top-style:dashed"></i>손절가</span><span><i style="border-color:#6b7280;border-top-style:dotted"></i>52주 고·저</span></div>
       </div>
 
-      <div class="card sec" style="margin-top:12px"><h2>예상 실적 <span class="muted">단위: 억원, EPS 원 · 네이버 증권 컨센서스(E)</span></h2>
-        <div class="tbl-wrap" style="display:block"><table class="mini"><thead><tr><th></th><th>${yr - 1} ${tag(est.prev)}</th><th>${yr} ${tag(est.cur)}</th><th>성장률</th><th>${yr + 1} ${tag(est.next)}</th><th>성장률</th></tr></thead>
-          <tbody>${yrow("매출액", "revenue")}${yrow("영업이익", "op_income")}${yrow("EPS", "eps", "won")}</tbody></table></div>
-        ${est.turnaround_next ? '<p class="small up">내년 흑자전환 예상</p>' : ""}
-        <p class="tiny muted" style="margin:8px 0 0">DART 확정 실적${fin.annual ? ` (${fin.annual.year}년 사업보고서, ${esc(fin.annual.fs)})` : ""}: 매출 ${eok(fin.annual?.revenue)} · 영업이익 ${eok(fin.annual?.op_income)} · 순이익 ${eok(fin.annual?.net_income)}</p>
+      <div class="card sec" style="margin-top:12px"><h2>실적 · 컨센서스 <span class="muted">억원, EPS 원 · 네이버 증권</span></h2>
+        <table class="mini"><thead><tr><th></th><th>${yr - 1} ${tag(est.prev)}</th><th>${yr} ${tag(est.cur)}</th><th>성장률</th><th>${yr + 1} ${tag(est.next)}</th><th>성장률</th></tr></thead>
+          <tbody>${yrow("매출액", "revenue")}${yrow("영업이익", "op_income")}${yrow("EPS", "eps", "won")}</tbody></table>
+        ${fin.annual ? `<p class="tiny muted" style="margin:8px 0 0">DART 확정 (${fin.annual.year} 사업보고서, ${esc(fin.annual.fs)}): 매출 ${eok(fin.annual.revenue)} · 영업이익 ${eok(fin.annual.op_income)} · 순이익 ${eok(fin.annual.net_income)}</p>` : ""}
       </div>
 
-      <div class="card sec" style="margin-top:12px"><h2>매매 전략 <span class="muted">권장 비중 ${(s.weight_pct || 0).toFixed(1)}% (최대 ${DATA.meta.config.strategy.max_weight_pct}%)</span></h2>
+      <div class="card sec" style="margin-top:12px"><h2>매매 전략 <span class="muted">권장 비중 ${(s.weight_pct || 0).toFixed(1)}% · 최대 ${DATA.meta.config.strategy.max_weight_pct}%</span></h2>
         ${pl ? planHtml(s, pl) : '<p class="muted">시세 데이터가 없어 전략을 산출하지 못했습니다.</p>'}
       </div>
 
-      <div class="grid2">
-        <div class="card sec"><h2>리스크</h2>
-          <div class="kv" style="grid-template-columns:1fr 1fr">
-            <div><div class="k">잠재 희석률 (CB·BW·유증)</div><div class="v">${p1(s.dilution_pct)}</div><div class="x">${esc(dil?.basis || (dart.enabled ? "" : "DART 키 미설정"))}</div></div>
-            <div><div class="k">시트 메모 리스크 키워드</div><div class="v small">${sc.memo_hits?.length ? esc(sc.memo_hits.join(", ")) : "없음"}</div></div>
-          </div>
-          ${dil?.events?.length ? `<table class="mini" style="margin-top:10px"><thead><tr><th>공시일</th><th>종류</th><th>주식수</th><th>주식총수 대비</th><th>전환/행사가</th></tr></thead><tbody>
-            ${dil.events.slice(0, 10).map((e) => `<tr><td><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${esc(e.rcept_no)}" target="_blank" rel="noopener">${esc(e.date)}</a></td><td>${esc(e.type)}</td><td>${n0(e.shares)}</td><td>${p1(e.pct_of_shares)}</td><td>${won(e.conv_price)}</td></tr>`).join("")}
-          </tbody></table>` : `<p class="small muted">${dart.enabled ? "조회 기간 내 CB·BW·유상증자 결정 공시 없음" : ""}</p>`}
-          <div class="memo-t" style="margin-top:10px">Risk (시트)</div><pre class="memo">${esc(s.sheet?.risk || "—")}</pre>
-          <div class="memo-t">비고 · 주가희석요소 및 경영진 Check (시트)</div><pre class="memo">${esc(s.sheet?.note || "—")}</pre>
-        </div>
-        <div class="card sec"><h2>시트 원문 메모</h2>
-          <div class="memo-t">투자아이디어</div><pre class="memo">${esc(s.sheet?.idea || "—")}</pre>
-          <div class="memo-t">목표가 근거</div><pre class="memo">${esc(s.sheet?.basis || "—")}</pre>
-          ${s.sheet?.qna ? `<div class="memo-t">Q&amp;A</div><pre class="memo">${esc(s.sheet.qna)}</pre>` : ""}
-          ${s.sheet?.etc ? `<div class="memo-t">기타</div><pre class="memo">${esc(s.sheet.etc)}</pre>` : ""}
-        </div>
-      </div>
+      ${s.club ? `<div class="card sec" style="margin-top:12px"><h2>모임 발표 기록</h2>
+        <table class="mini"><thead><tr><th>발표일</th><th>발표자</th><th>발표일 주가</th><th>목표가</th><th>이후 수익률</th></tr></thead><tbody>
+          ${(s.pitches || []).map((p) => `<tr><td>${esc(p.date || "N/A")}</td><td>${esc(p.presenter || "N/A")}</td><td>${won(p.price_at_pitch)}</td>
+            <td>${p.target ? won(p.target) : esc(p.target_raw || "N/A")}</td><td>${sgn(p.return_since, 1)}</td></tr>`).join("")}</tbody></table>
+        <div class="grid2" style="margin-top:12px">
+          <div><div class="memo-t">투자아이디어</div><pre class="memo">${esc(sh.idea || "—")}</pre>
+            <div class="memo-t">목표가 근거</div><pre class="memo">${esc(sh.basis || "—")}</pre></div>
+          <div><div class="memo-t">Risk</div><pre class="memo">${esc(sh.risk || "—")}</pre>
+            <div class="memo-t">비고 · 희석요소 및 경영진 Check</div><pre class="memo">${esc(sh.note || "—")}</pre></div>
+        </div></div>` : ""}
       ${s.errors?.length ? `<p class="errs">수집 실패 항목: ${esc(s.errors.join(" / "))}</p>` : ""}`;
-
-    try {
-      const rows = await prices(code);
-      drawChart(document.getElementById("chart"), rows, s);
-    } catch (e) {
-      document.getElementById("chart").innerHTML = `<p class="muted small">차트 데이터 N/A</p>`;
-    }
+    if (s.chart) drawChart(document.getElementById("chart"), s.chart, s);
+    else document.getElementById("chart").innerHTML = `<p class="muted small">차트 데이터 N/A</p>`;
   }
 
   function planHtml(s, pl) {
@@ -392,76 +428,86 @@
     svg.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.setAttribute("opacity", "0"); });
   }
 
-  // ------------------------------------------------------------ 섹터
+
+  // ------------------------------------------------------------ 업종
   function renderSectors() {
     const secs = Object.entries(DATA.sectors).sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0], "ko"));
-    const by = Object.fromEntries(DATA.stocks.map((s) => [s.code, s]));
-    $app.innerHTML = `<h1 class="page">섹터 뷰</h1>
-      <p class="small muted" style="margin:4px 0 0">모임 시트의 섹터 분류 기준. 평균·중앙값은 PER·PBR이 양수인 종목만으로 계산합니다.</p>
-      <div class="secgrid">${secs.map(([name, st]) => `<div class="card"><h3>${esc(name)} <span class="tiny muted">${st.n}종목</span></h3>
-        <div class="kv" style="grid-template-columns:1fr 1fr;margin-bottom:8px">
-          <div><div class="k">평균 PER (중앙값)</div><div class="v">${x1(st.per_mean)} <span class="tiny muted">(${x1(st.per_median)})</span></div></div>
-          <div><div class="k">평균 PBR (중앙값)</div><div class="v">${x1(st.pbr_mean, "배")} <span class="tiny muted">(${x1(st.pbr_median, "배")})</span></div></div></div>
-        ${st.codes.map((c) => by[c]).filter(Boolean).sort((a, b) => a.rank - b.rank).map((s) => `<a class="mrow" href="#/stock/${esc(s.code)}">
-          <span><b>${esc(s.name)}</b> <span class="tiny muted">${s.rank}위</span></span>
-          <span class="small">${gradeShort[s.score.grade]} · PER ${perf(s.per)} · PBR ${x1(s.pbr, "")}</span></a>`).join("")}
-      </div>`).join("")}</div>`;
+    const bySec = {};
+    DATA.stocks.forEach((s) => (bySec[s.sector] = bySec[s.sector] || []).push(s));
+    $app.innerHTML = `<h1 class="page">업종 뷰</h1>
+      <p class="small muted" style="margin:4px 0 0">네이버 업종 분류 기준. PER·PBR 중앙값(평균)은 양수인 종목만으로 계산하며, 각 종목의 밸류에이션 비교 기준이 됩니다.</p>
+      <div class="secgrid">${secs.map(([name, st]) => {
+        const L = (bySec[name] || []).sort((a, b) => a.rank - b.rank);
+        const g = L.filter((s) => s.score.grade === "green").length;
+        return `<div class="card"><h3>${esc(name)} <span class="tiny muted">${st.n}종목 · 🟢 ${g}</span></h3>
+          <div class="kv"><div><div class="k">PER 중앙값 (평균)</div><div class="v">${x1(st.per_median)} <span class="tiny muted">(${x1(st.per_mean)})</span></div></div>
+            <div><div class="k">PBR 중앙값 (평균)</div><div class="v">${x1(st.pbr_median, "배")} <span class="tiny muted">(${x1(st.pbr_mean, "배")})</span></div></div></div>
+          ${L.slice(0, 5).map((s) => `<a class="mrow" href="#/stock/${esc(s.code)}"><span><b>${esc(s.name)}</b> <span class="tiny muted">${s.rank}위</span></span>
+            <span>${gradeShort[s.score.grade]} · 업사이드 ${sgn(s.score.upside_pct, 0)}</span></a>`).join("")}
+          ${L.length > 5 ? `<a class="mrow more-s" href="#/" data-sector="${esc(name)}"><span class="muted">전체 ${L.length}종목 보기 →</span><span></span></a>` : ""}
+        </div>`;
+      }).join("")}</div>`;
+    $app.querySelectorAll("[data-sector]").forEach((a) => a.addEventListener("click", () => {
+      state.sector = a.dataset.sector; state.jumpAll = true;
+    }));
   }
 
   // ------------------------------------------------------------ 매매 원칙
   function renderRules() {
-    const C = DATA.meta.config, st = C.strategy, cs = C.cash, gr = C.grades, w = C.weights, rk = C.risk;
-    const wsum = Object.values(w).reduce((a, b) => a + b, 0);
+    const C = DATA.meta.config, st = C.strategy, cs = C.cash, gr = C.grades, w = C.weights, rk = C.risk, tg = C.target, u = DATA.meta.universe || {};
+    const f = u.filters || {};
     const steps = st.entry_steps_pct.map((p, i) => `${i + 1}차 ${p === 0 ? "현재가" : `현재가 ${p}%`} (${Math.round(st.entry_split[i] * 100)}%)`).join(" → ");
     $app.innerHTML = `<div class="rules"><h1 class="page" style="margin-bottom:12px">매매 원칙</h1>
+      <div class="card"><h2>0. 분석 방식 — 모임 시트의 틀을 전 종목에</h2><ul>
+        <li>대상: 코스피·코스닥 ${n0(u.listed)}개 중 <b>시총 ${n0(f.min_mcap_eok)}억↑, 거래대금 ${n0((f.min_trade_value_mil || 0) / 100)}억↑ 보통주</b> ${n0(u.analyzed)}개 (+모임 발표 종목은 항상 포함)</li>
+        <li><b>투자아이디어</b>(왜 사야 하나)·<b>Risk</b>·<b>목표가 근거</b>·<b>비고(희석요소·경영진 Check)</b>를 종목마다 데이터로 자동 작성</li>
+        <li>목표가: 증권사 컨센서스 → 없으면 모델 적정가(업종 중앙 PER × 예상 EPS × ${tg.model_haircut}, 현재가 +${tg.model_max_upside_pct}% 상한) → 모임 목표가</li>
+        <li>DART(희석·부채·대주주)는 1차 점수 상위 ${rk.dart_top_n}종목과 모임 종목만 조회</li></ul></div>
       <div class="card"><h2>1. 등급과 행동</h2>
-        <table class="mini"><thead><tr><th>등급</th><th>총점</th><th>행동</th></tr></thead><tbody>
-          <tr><td>${gradeShort.green}(적극 매수)</td><td>${gr.green}점 이상</td><td class="l" style="text-align:left">계획한 분할매수 전부 실행 가능</td></tr>
+        <table class="mini"><thead><tr><th>등급</th><th>총점</th><th style="text-align:left">행동</th></tr></thead><tbody>
+          <tr><td>${gradeShort.green}</td><td>${gr.green}점 이상</td><td style="text-align:left">계획한 분할매수 실행</td></tr>
           <tr><td>${gradeShort.yellow}</td><td>${gr.yellow}~${gr.green}점</td><td style="text-align:left">비중 절반(×${st.grade_multiplier.yellow})으로 천천히</td></tr>
-          <tr><td>${gradeShort.white}</td><td>${gr.white}~${gr.yellow}점</td><td style="text-align:left">신규 매수 보류, 보유분은 손절·익절 규칙만 적용</td></tr>
-          <tr><td>${gradeShort.red}(매수 금지)</td><td>${gr.white}점 미만</td><td style="text-align:left">신규 매수 금지${gr.red_if_negative_upside ? " · 현재가가 목표가 이상이어도 🔴" : ""}</td></tr>
-        </tbody></table>
-        <p class="small muted">총점 = 업사이드 ${w.upside} · 밸류에이션 ${w.valuation} · 실적 모멘텀 ${w.momentum} · 가격 위치 ${w.price_position} 가중평균(합 ${wsum}) − 리스크 감점(최대 ${rk.max_total}점). 데이터 충족률이 ${Math.round(gr.min_coverage * 100)}% 미만이면 최고 ⚪.</p></div>
-      <div class="card"><h2>2. 진입 — 3회 분할매수</h2><ul>
-        <li>${steps}</li>
-        <li>2·3차 가격 ±${st.support_snap_pct}% 안에 최근 ${st.support_lookbacks.join("·")}일 저점(지지선)이 있으면 그 지지선 바로 위로 조정</li>
-        <li>등급이 🟡 이하로 떨어지면 남은 차수는 보류</li></ul></div>
+          <tr><td>${gradeShort.white}</td><td>${gr.white}~${gr.yellow}점</td><td style="text-align:left">신규 매수 보류</td></tr>
+          <tr><td>${gradeShort.red}</td><td>${gr.white}점 미만</td><td style="text-align:left">매수 금지${gr.red_if_negative_upside ? " · 현재가 ≥ 목표가여도 🔴" : ""}</td></tr></tbody></table>
+        <p class="small">총점 = 업사이드 ${w.upside} · 밸류에이션 ${w.valuation} · 실적 모멘텀 ${w.momentum} · 가격 위치 ${w.price_position} 가중평균 − 리스크 감점(최대 ${rk.max_total}점). 충족률 ${Math.round(gr.min_coverage * 100)}% 미만이면 최고 ⚪.</p></div>
+      <div class="card"><h2>2. 진입 — 3회 분할매수</h2><ul><li>${steps}</li>
+        <li>2·3차 가격 ±${st.support_snap_pct}% 안에 최근 ${st.support_lookbacks.join("·")}일 저점(지지선)이 있으면 지지선 바로 위로 조정</li></ul></div>
       <div class="card"><h2>3. 비중</h2><ul>
-        <li>권장 비중 ∝ 등급 배수(🟢 ${st.grade_multiplier.green} · 🟡 ${st.grade_multiplier.yellow}) × 총점 ÷ 60일 변동성 → 주식 몫(100% − 현금 비중) 안에서 배분</li>
-        <li><b>한 종목 최대 ${st.max_weight_pct}%</b> (넘는 몫은 다른 종목에 재배분, 남으면 현금)</li></ul></div>
+        <li>순위 상위 <b>${st.portfolio_size}종목</b>(🟢·🟡)에만 배분: 등급 배수 × 총점 ÷ 60일 변동성</li>
+        <li><b>한 종목 최대 ${st.max_weight_pct}%</b></li></ul></div>
       <div class="card"><h2>4. 손절</h2><ul>
         <li>평균 진입가 대비 <b>${st.stop_loss_pct}%</b> 또는 주요 지지선 ${st.stop_below_support_pct}% 이탈 중 <b>먼저 닿는 가격</b></li>
-        <li>가격과 상관없이 <b>투자 논리가 훼손되면</b>(실적 쇼크, 대규모 희석, 경영진 이슈 등) 즉시 정리</li>
-        <li>손절 후 같은 종목 재진입은 등급이 다시 🟢가 된 뒤에만</li></ul></div>
+        <li>투자 논리 훼손(실적 쇼크, 대규모 희석, 경영진 이슈) 시 즉시 정리</li></ul></div>
       <div class="card"><h2>5. 익절</h2><ul>
-        <li>1차: 목표가까지 상승여력의 <b>${Math.round(st.take_profit_1_progress * 100)}%</b> 도달 시 보유분 <b>${Math.round(st.take_profit_1_fraction * 100)}%</b> 매도</li>
-        <li>2차: <b>목표가 도달</b> 시 잔량 대부분 매도</li>
-        <li>추적 손절: 1차 익절 이후 종가 기준 최고가 대비 <b>${st.trailing_stop_pct}%</b> 하락 시 잔량 매도</li>
-        <li>목표가가 상향되면 2차 익절가도 따라 올리되, 1차 익절 물량은 되사지 않음</li></ul></div>
+        <li>1차: 목표가까지 상승여력의 <b>${Math.round(st.take_profit_1_progress * 100)}%</b> 도달 → 보유분 <b>${Math.round(st.take_profit_1_fraction * 100)}%</b> 매도</li>
+        <li>2차: <b>목표가 도달</b> → 잔량 대부분 매도</li>
+        <li>추적 손절: 1차 익절 이후 최고가 대비 <b>${st.trailing_stop_pct}%</b></li></ul></div>
       <div class="card"><h2>6. 현금 관리</h2>
         <table class="mini"><thead><tr><th>코스피 추세</th><th>기본 현금</th></tr></thead><tbody>
           <tr><td>${cs.ma_short}·${cs.ma_long}일선 모두 위</td><td>${cs.base_pct.above_both}%</td></tr>
-          <tr><td>하나만 위(혼조)</td><td>${cs.base_pct.mixed}%</td></tr>
-          <tr><td>모두 아래</td><td>${cs.base_pct.below_both}%</td></tr></tbody></table>
-        <p class="small">🟢 종목 수에 따라 가감: ${cs.green_adjust.map((r) => `${r.min_green}개 이상 ${r.adj >= 0 ? "+" : ""}${r.adj}%p`).join(" · ")} (범위 ${cs.min_pct}~${cs.max_pct}%)</p>
-        <p class="small">현재: <b>${DATA.meta.cash.cash_pct}%</b> — ${esc(DATA.meta.cash.trend_desc)}, 🟢 ${DATA.meta.cash.n_green}종목</p></div>
+          <tr><td>혼조</td><td>${cs.base_pct.mixed}%</td></tr><tr><td>모두 아래</td><td>${cs.base_pct.below_both}%</td></tr></tbody></table>
+        <p class="small">🟢 종목 수에 따라 가감: ${cs.green_adjust.map((r) => `${r.min_green}개↑ ${r.adj >= 0 ? "+" : ""}${r.adj}%p`).join(" · ")} (범위 ${cs.min_pct}~${cs.max_pct}%)</p>
+        <p class="small">현재 <b>${DATA.meta.cash.cash_pct}%</b> — ${esc(DATA.meta.cash.trend_desc)}, 🟢 ${DATA.meta.cash.n_green}종목</p></div>
       <div class="card"><h2>7. 점검 습관</h2><ul>
-        <li>매수 전 종목 상세의 <b>비고(희석 요소·경영진 Check)</b>와 DART 희석 공시를 반드시 확인</li>
-        <li>N/A가 많은 종목은 점수가 과대·과소평가될 수 있으므로 원자료 확인 후 판단</li>
-        <li>이 규칙과 점수는 기계적 참고 지표입니다. 최종 판단은 각자 합니다.</li></ul></div>
+        <li>매수 전 <b>체크포인트(희석·경영진)</b>와 DART 공시를 직접 확인</li>
+        <li>모델 적정가 종목은 증권사 커버리지가 없는 종목 — 사업 내용을 먼저 공부</li>
+        <li>이 점수는 기계적 참고 지표입니다. 최종 판단은 각자 합니다.</li></ul></div>
     </div>`;
   }
 
   // ------------------------------------------------------------ 라우터
+  function setNav(k) {
+    document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === k));
+  }
   function route() {
     const h = location.hash || "#/";
-    document.querySelectorAll("[data-nav]").forEach((a) => a.classList.remove("on"));
+    $status.style.display = h === "#/" || h === "#" || h === "" ? "" : "none";
     const m = h.match(/^#\/stock\/([0-9A-Z]{6})/);
-    window.scrollTo(0, 0);
-    if (m) { document.querySelectorAll('[data-nav="rank"]').forEach((a) => a.classList.add("on")); renderStock(m[1]); return; }
-    if (h.startsWith("#/sectors")) { document.querySelectorAll('[data-nav="sectors"]').forEach((a) => a.classList.add("on")); renderSectors(); return; }
-    if (h.startsWith("#/rules")) { document.querySelectorAll('[data-nav="rules"]').forEach((a) => a.classList.add("on")); renderRules(); return; }
-    document.querySelectorAll('[data-nav="rank"]').forEach((a) => a.classList.add("on"));
+    if (!state.jumpAll) window.scrollTo(0, 0);
+    if (m) { setNav("rank"); renderStock(m[1]); return; }
+    if (h.startsWith("#/sectors")) { setNav("sectors"); renderSectors(); return; }
+    if (h.startsWith("#/rules")) { setNav("rules"); renderRules(); return; }
+    setNav("rank");
     renderRank();
   }
 

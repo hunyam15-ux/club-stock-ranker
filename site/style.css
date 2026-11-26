@@ -169,10 +169,60 @@ h1.page{font-size:24px;margin:20px 0 4px;letter-spacing:-.8px}
 .disclaimer b{color:var(--ink)}
 .foot .src{margin:0;font-size:12px;color:var(--ink3)}
 
+
+/* TOP 픽 카드 */
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:28px 2px 12px;flex-wrap:wrap}
+.sec-h h2{margin:0;font-size:21px;letter-spacing:-.6px}
+.picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.pick{background:var(--card);border-radius:var(--r);padding:20px;cursor:pointer;transition:transform .12s,background .12s;display:flex;flex-direction:column}
+.pick:hover{background:#202026}
+.pick:active{transform:scale(.995)}
+.pick-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pick-title{display:flex;gap:12px;align-items:center;min-width:0}
+.pick-title h3{margin:0;font-size:19px;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-title > div{min-width:0}
+.rkb{flex:none;width:32px;height:32px;border-radius:10px;background:rgba(49,130,246,.16);color:var(--blue);font-weight:800;display:grid;place-items:center;font-size:15px}
+.pick-price{text-align:right;flex:none}
+.pick-price b{display:block;font-size:18px;letter-spacing:-.4px}
+.pick-verdict{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 14px}
+.score-big{font-size:22px;font-weight:800;letter-spacing:-.6px}
+.score-big small{font-size:13px;color:var(--ink3);font-weight:600;margin-left:1px}
+.pick-verdict .tiny{flex-basis:100%;line-height:1.45}
+.boxes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.boxes.big{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.boxes.big .box{background:var(--card);padding:20px;border-radius:var(--r)}
+.box{background:var(--card2);border-radius:var(--r2);padding:14px 15px;min-width:0}
+.box-t{font-size:14px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px}
+.box.good .box-t{color:#7fe3a8}
+.box.bad .box-t{color:#ff9aa2}
+.blist{margin:0;padding-left:16px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+.blist li{margin:3px 0}
+.blist li::marker{color:var(--ink3)}
+.chips-s{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.tag{display:inline-block;padding:2px 8px;border-radius:7px;background:rgba(255,255,255,.07);font-size:12px;color:var(--ink2);font-weight:600;white-space:nowrap;vertical-align:middle}
+.tag.club{background:rgba(49,130,246,.18);color:#8fb8ff;font-size:11px;padding:1px 6px;margin-left:2px}
+.desc{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink2);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.tp{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.tp > div{display:flex;flex-direction:column}
+.tp .k{font-size:12px;color:var(--ink3)}
+.tp b{font-size:16px;letter-spacing:-.3px}
+.boxes.big .tp{grid-template-columns:1fr;margin-bottom:8px}
+.boxes.big .tp b{font-size:22px}
+.more{display:block;margin-top:14px;text-align:center;padding:12px;border-radius:12px;background:var(--card2);color:var(--ink2);text-decoration:none;font-size:14px;font-weight:700}
+.more:hover{color:var(--ink)}
+.morebar{text-align:center;margin:14px 0 6px}
+.morebar .chip{height:42px;padding:0 22px}
+.unit{font-size:15px;color:var(--ink3);margin-left:2px;font-weight:700}
+.secgrid .more-s span{color:var(--blue)!important}
+
 /* 모바일 하단 탭바 */
 .tabbar{display:none}
 
+@media (max-width:1080px){
+  .boxes.big{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
 @media (max-width:960px){
+  .picks{grid-template-columns:minmax(0,1fr)}
   .hero{grid-template-columns:1fr 1fr;gap:18px}
   .grid2{grid-template-columns:minmax(0,1fr)}
   .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -210,4 +260,9 @@ h1.page{font-size:24px;margin:20px 0 4px;letter-spacing:-.8px}
   .comp{grid-template-columns:88px 1fr 34px}
   .rules .card{padding:20px 18px}
   .secgrid{grid-template-columns:minmax(0,1fr)}
+  .pick{padding:18px 16px;border-radius:18px}
+  .pick-title h3{font-size:18px}
+  .boxes,.boxes.big{grid-template-columns:minmax(0,1fr)}
+  .boxes.big .box{padding:18px}
+  .sec-h{margin:24px 2px 10px}
 }
