@@ -93,7 +93,7 @@ def process(r: dict, cfg: dict) -> list[dict]:
         bits.append(f"컨센서스 {_p(a['revision'], 1)}")
     steps.append({"name": "④ 알파(실적·수주)", "ok": (a.get("score") or 0) >= 55, "note": " · ".join(bits) or "신호 없음"})
     steps.append({"name": "⑤ 추세·위험", "ok": not sc.get("falling_knife"),
-                  "note": "하락 추세(떨어지는 칼날)" if sc.get("falling_knife") else
+                  "note": "하락 추세(−3점)" if sc.get("falling_knife") else
                   (f"변동성 연 {r['vol_annual']:.0f}%" if r.get("vol_annual") is not None else "")})
     return steps
 
@@ -154,9 +154,9 @@ def build(r: dict, macro_notes: list[str] | None = None) -> dict:
 
     # ---------- Risk
     for f in sc.get("quality_fails") or []:
-        risks.append((60, f"퀄리티 미달: {f}"))
+        risks.append((60, f"퀄리티 미달(감점): {f}"))
     if sc.get("falling_knife"):
-        risks.append((50, f"하락 추세 — 3개월 {_p(r.get('ret_3m') or 0)}, 200일선 아래 (떨어지는 칼날 주의)"))
+        risks.append((50, f"하락 추세 — 3개월 {_p(r.get('ret_3m') or 0)}, 200일선 아래 (−3점, 분할매수로 접근)"))
     if up is not None and up <= 0:
         risks.append((55, f"현재가가 {target_label(r.get('target_source'))}({_w(r['target'])}) 이상"))
     if r.get("target_cons") and r.get("price") and r["target_cons"] / r["price"] >= 2:

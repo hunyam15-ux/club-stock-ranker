@@ -104,14 +104,18 @@ def test_negative_upside_is_red():
     assert r["grade"] == "red" and "현재가 ≥ 보수적 목표가" in r["flags"]
 
 
-def test_quality_gate_caps_grade():
-    r = scoring.score_stock({**BASE, "per": -3, "roe": 2}, CFG)
-    assert r["grade"] in ("white", "red") and any("적자" in f for f in r["quality_fails"])
+def test_quality_fail_is_penalty():
+    r0 = scoring.score_stock(BASE, CFG)
+    r = scoring.score_stock({**BASE, "roe": 2}, CFG)
+    assert r["penalty_detail"]["quality"] == CFG["quality"]["penalty_per_fail"] and r["total"] < r0["total"]
 
 
-def test_falling_knife_caps_yellow():
-    r = scoring.score_stock({**BASE, "ret_3m": -40, "below_ma200": True, "revision_pct": None}, CFG)
-    assert r["falling_knife"] and r["grade"] in ("yellow", "white", "red")
+def test_falling_knife_is_minus_3():
+    s = {**BASE, "revision_pct": None}
+    r0 = scoring.score_stock(s, CFG)
+    r = scoring.score_stock({**s, "ret_3m": -40, "below_ma200": True}, CFG)
+    assert r["falling_knife"] and r["penalty_detail"]["knife"] == 3
+    assert r["grade"] == "green" or r["total"] < CFG["grades"]["green"]   # 상한 없이 점수로만
 
 
 def test_missing_data_is_conservative():
@@ -124,7 +128,7 @@ def test_missing_data_is_conservative():
 def test_risk_penalty():
     r0 = scoring.score_stock(BASE, CFG)
     r1 = scoring.score_stock({**BASE, "dilution_pct": 12, "debt_ratio": 350, "memo_text": "CB 오버행, 유상증자"}, CFG)
-    assert r1["penalty"] == min(15 + 10 + 6, CFG["risk"]["max_total"])
+    assert r1["penalty"] == min(15 + 10 + 6, CFG["risk"]["max_total"]) + 10   # 퀄리티(부채·희석) 2개 × 5
     assert r1["total"] < r0["total"] and r1["quality_fails"]
 
 

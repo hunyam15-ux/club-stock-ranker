@@ -429,8 +429,7 @@ def main(argv=None) -> int:
 
     # 6) 순위·현금·비중·전략·투자논리 ----------------------------------------
     apply_grade_caps(recs, cfg_sc["grades"])
-    g_order = {"green": 0, "yellow": 1, "white": 2, "red": 3}
-    recs.sort(key=lambda r: (g_order[r["score"]["grade"]], -(r["score"]["total"] if r["score"]["total"] is not None else -1)))
+    recs.sort(key=lambda r: -(r["score"]["total"] if r["score"]["total"] is not None else -1))  # 순수 점수순
     for i, r in enumerate(recs, 1):
         r["rank"] = i
 

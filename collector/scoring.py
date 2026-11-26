@@ -2,9 +2,9 @@
 
 종목 선정 프로세스
   ① 유니버스 필터(universe.py)
-  ② 퀄리티 게이트: 적자·낮은 ROE·과도한 부채·대규모 희석·데이터 부족 → 최고 ⚪ (가치 함정 회피)
+  ② 퀄리티 체크: 적자·낮은 ROE·과도한 부채·대규모 희석 → 항목당 감점 (가치 함정 회피)
   ③ 알파 점수: 업사이드(보수적 목표가) · 가치(업종 대비·안전마진) · 성장 · 알파(서프라이즈·수주·컨센서스 상향) · 가격/위험(위치·저변동성)
-  ④ 리스크 감점(희석·부채·메모) · 떨어지는 칼날 → 최고 🟡
+  ④ 리스크 감점(희석·부채·메모) · 떨어지는 칼날 −3점 → 순위는 순수 점수순
   ⑤ 등급 정원(🟢·🟡)
 
 입력 s(dict)의 주요 키 (없으면 None) — main.score_input 참고.
@@ -158,7 +158,16 @@ def score_stock(s: dict, cfg: dict) -> dict:
     memo = s.get("memo_text") or ""
     hits = [kw for kw in rk["memo_keywords"] if kw.lower() in memo.lower()]
     pen["memo"] = min(len(hits) * rk["memo_points_per_keyword"], rk["memo_points_max"])
-    penalty = min(sum(x for x in pen.values() if x), rk["max_total"])
+    # 퀄리티 미달·하락 추세는 등급 상한 대신 감점(순위는 순수 점수순)
+    fails = quality_gate(s, cfg)
+    q = cfg["quality"]
+    pen["quality"] = min(len(fails) * q["penalty_per_fail"], q["penalty_max"]) if fails else 0.0
+    fk = cfg["falling_knife"]
+    knife = (s.get("ret_3m") is not None and s["ret_3m"] <= fk["ret_3m_pct"]
+             and bool(s.get("below_ma200")) and not (rev is not None and rev > 0))
+    pen["knife"] = float(fk["penalty_points"]) if knife else 0.0
+    penalty = min(sum(x for k, x in pen.items() if x and k not in ("quality", "knife")), rk["max_total"]) \
+        + pen["quality"] + pen["knife"]
 
     # 총점: 결측 항목은 제외하지 않고 보수적 점수(missing_component_score)로 계산 --------
     total_w = sum(c["weight"] for c in comps.values())
@@ -179,29 +188,17 @@ def score_stock(s: dict, cfg: dict) -> dict:
     else:
         grade = "red"
     flags = []
+    if coverage < gc["min_coverage"]:
+        fails.append(f"데이터 부족(충족률 {coverage * 100:.0f}%)")
+    if knife:
+        flags.append(f"하락 추세 −{fk['penalty_points']}점")
+    if fails:
+        flags.append("퀄리티 미달 감점")
     # 🔴(매수 금지)는 '비싸다'는 근거가 있을 때만: 데이터가 부족해 점수가 낮은 것은 ⚪(관망)
     if grade == "red" and coverage < gc["min_coverage"] and not (up is not None and up <= 0):
         grade = "white"
         flags.append("데이터 부족으로 관망")
 
-    # 퀄리티 게이트 → 최고 ⚪
-    fails = quality_gate(s, cfg)
-    if coverage < gc["min_coverage"]:
-        fails.append(f"데이터 부족(충족률 {coverage * 100:.0f}%)")
-    if fails:
-        new = _cap(grade, "white")
-        if new != grade:
-            flags.append("퀄리티 미달")
-        grade = new
-    # 떨어지는 칼날 → 최고 🟡
-    fk = cfg["falling_knife"]
-    knife = (s.get("ret_3m") is not None and s["ret_3m"] <= fk["ret_3m_pct"]
-             and bool(s.get("below_ma200")) and not (rev is not None and rev > 0))
-    if knife:
-        new = _cap(grade, "yellow")
-        if new != grade:
-            flags.append("하락 추세(떨어지는 칼날)")
-        grade = new
     if gc.get("red_if_negative_upside") and up is not None and up <= 0:
         grade = "red"
         flags.append("현재가 ≥ 보수적 목표가")

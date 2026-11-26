@@ -185,7 +185,7 @@
     const picks = DATA.stocks.filter((s) => s.score.grade === "green" || s.score.grade === "yellow").slice(0, TOP_N);
     const clubN = DATA.stocks.filter((s) => s.club).length;
     $app.innerHTML = `
-      <div class="sec-h"><h2>오늘의 TOP ${picks.length} 픽</h2><span class="muted small">점수 상위 🟢·🟡 종목 · 카드를 누르면 상세</span></div>
+      <div class="sec-h"><h2>오늘의 TOP ${picks.length} 픽</h2><span class="muted small">총점 상위 🟢·🟡 종목 · 카드를 누르면 상세</span></div>
       <div class="picks">${picks.map(pickCard).join("") || '<p class="muted">현재 매수 등급 종목이 없습니다.</p>'}</div>
 
       ${portfolioHtml()}
@@ -333,7 +333,7 @@
             ${dil.events.slice(0, 6).map((e) => `<tr><td><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${esc(e.rcept_no)}" target="_blank" rel="noopener">${esc(e.date)}</a></td><td>${esc(e.type)}</td><td>${p1(e.pct_of_shares)}</td></tr>`).join("")}</tbody></table>` : ""}</section>
         <section class="box"><div class="box-t">📊 점수 구성 <span class="muted tiny">충족률 ${(sc.coverage * 100).toFixed(0)}%</span></div>
           ${comp("upside", "업사이드")}${comp("value", "가치")}${comp("growth", "성장")}${comp("alpha", "알파")}${comp("price_risk", "가격·위험")}
-          <div class="comp"><span>리스크 감점</span><span class="tiny muted">희석 ${pd.dilution ?? "N/A"} · 부채 ${pd.debt ?? "N/A"} · 메모 ${pd.memo ?? 0}</span><b class="num down">−${sc.penalty}</b></div></section>
+          <div class="comp"><span>감점</span><span class="tiny muted">희석 ${pd.dilution ?? "N/A"} · 부채 ${pd.debt ?? "N/A"} · 메모 ${pd.memo ?? 0} · 퀄리티 ${pd.quality ?? 0} · 추세 ${pd.knife ?? 0}</span><b class="num down">−${sc.penalty}</b></div></section>
       </div>
 
       <div class="card sec" style="margin-top:12px"><h2>주요 지표</h2>
@@ -537,13 +537,13 @@
     $app.innerHTML = `<div class="rules"><h1 class="page" style="margin-bottom:12px">투자 전략 · 매매 원칙</h1>
       <div class="card"><h2>🧭 종목 선정 프로세스</h2><ol class="olist">
         <li><b>유니버스</b> — 코스피·코스닥 ${n0(u.listed)}개 중 시총 ${n0(f.min_mcap_eok)}억↑ · 거래대금 ${n0((f.min_trade_value_mil || 0) / 100)}억↑ 보통주 ${n0(u.analyzed)}개 (+모임 발표 종목)</li>
-        <li><b>퀄리티 게이트</b>(가치 함정 회피) — 적자, ROE &lt; ${q.min_roe}%, 부채비율 &gt; ${q.max_debt_ratio}%(금융 제외), 잠재 희석 ≥ ${q.max_dilution_pct}%, 데이터 충족률 &lt; ${Math.round(gr.min_coverage * 100)}% 중 하나라도 해당하면 <b>최고 ⚪</b></li>
+        <li><b>퀄리티 체크</b>(가치 함정 회피) — 적자, ROE &lt; ${q.min_roe}%, 부채비율 &gt; ${q.max_debt_ratio}%(금융 제외), 잠재 희석 ≥ ${q.max_dilution_pct}% — 걸린 항목당 <b>−${q.penalty_per_fail}점</b>(최대 −${q.penalty_max})</li>
         <li><b>가치</b> — 보수적 내재가치(예상 EPS × (1−${tg.intrinsic_eps_haircut * 100}%) × 업종 중앙 PER) 대비 <b>안전마진</b>, 업종 대비 PER·PBR, Forward PER</li>
         <li><b>알파</b> — ① 실적 서프라이즈(분기 영업이익 vs 발표 직전 컨센서스) ② 신규 수주(최근 ${al.orders_months}개월 단일판매·공급계약 공시, 매출 대비 %) ③ 컨센서스 EPS 상향</li>
         <li><b>성장</b> — 예상 EPS·영업이익 성장률 (PER이 높더라도 이익 성장이 나오는 종목)</li>
-        <li><b>가격·위험</b> — 52주 위치, 3개월 수익률, <b>저변동성</b>. 3개월 ${C.falling_knife.ret_3m_pct}% 이하 + 200일선 아래 + 컨센서스 상향 없음 = <b>떨어지는 칼날 → 최고 🟡</b></li>
+        <li><b>가격·위험</b> — 52주 위치, 3개월 수익률, <b>저변동성</b>(책의 저변동성 투자). 3개월 ${C.falling_knife.ret_3m_pct}% 이하 + 200일선 아래 + 컨센서스 상향 없음 = 하락 추세 <b>−${C.falling_knife.penalty_points}점</b> (싸면 여전히 상위 가능)</li>
         <li><b>리스크 감점</b> — 희석·부채·모임 메모 키워드 (최대 ${rk.max_total}점)</li>
-        <li><b>등급 정원</b> — 🟢 ${gr.max_green}개, 🟡 ${gr.max_yellow}개까지만</li></ol></div>
+        <li><b>순위는 순수 총점순</b> · 등급 정원 🟢 ${gr.max_green}개, 🟡 ${gr.max_yellow}개 (현재가 ≥ 보수적 목표가면 🔴 표시)</li></ol></div>
       <div class="card"><h2>🎯 보수적 목표가</h2><ul>
         <li>목표가 = <b>min(컨센서스 × ${tg.consensus_haircut}, 보수적 내재가치)</b> — 증권사 낙관 편향과 이익 추정 오차를 모두 할인</li>
         <li>컨센서스가 없으면 내재가치만 사용(현재가 +${tg.model_max_upside_pct}% 상한)</li>

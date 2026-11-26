@@ -5,15 +5,18 @@
 #  - 데이터가 없는 항목은 '제외'하지 않고 missing_component_score(보수적 점수)로 계산
 # ============================================================
 
-# ---- 종목 선정 프로세스 ① 퀄리티 게이트 (하나라도 걸리면 최고 ⚪ = 가치 함정 회피) ----
+# ---- 종목 선정 프로세스 ① 퀄리티 체크 (걸린 항목당 감점 = 가치 함정 회피) ----
 quality:
+  penalty_per_fail: 5        # 항목당 −5점
+  penalty_max: 15
   min_roe: 5                 # 최근 연간 ROE 5% 미만
   max_debt_ratio: 200        # 부채비율 200% 초과 (금융업 제외)
   max_dilution_pct: 10       # CB·BW·유증 잠재 희석 10% 이상
 
-# ---- ② 떨어지는 칼날 (최고 🟡) : 3개월 -30% 이하 + 200일선 아래 + 컨센서스 상향 없음 ----
+# ---- ② 떨어지는 칼날: 3개월 -30% 이하 + 200일선 아래 + 컨센서스 상향 없음 → 감점 ----
 falling_knife:
   ret_3m_pct: -30
+  penalty_points: 3
 
 # ---- ③ 알파 점수 가중치 ----
 weights:
@@ -29,7 +32,7 @@ grades:
   green: 70
   yellow: 58
   white: 45
-  min_coverage: 0.7          # 충족률 70% 미만은 퀄리티 미달로 처리(최고 ⚪)
+  min_coverage: 0.7          # 충족률 70% 미만이면 🔴 대신 ⚪(데이터 부족) 표시
   red_if_negative_upside: true
   max_green: 20              # 🟢 정원
   max_yellow: 60             # 🟡 정원
