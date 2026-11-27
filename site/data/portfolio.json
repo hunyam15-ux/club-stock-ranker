@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-27 00:28 KST",
+ "generated_at": "2026-11-28 02:38 KST",
  "cash_pct": 40,
  "cash_steps": [
   {
@@ -23,14 +23,14 @@
   {
    "key": "stocks",
    "label": "개별주식",
-   "pct": 59.5,
+   "pct": 55.2,
    "color": "#3182f6",
-   "note": "코어(대형) 41.5% · 새틀라이트(중소형) 18.0% · 개꿀 가중"
+   "note": "코어(대형) 43.2% · 새틀라이트(중소형) 12.0%"
   },
   {
    "key": "etf",
    "label": "지수 ETF (코스피200)",
-   "pct": 0.5,
+   "pct": 4.8,
    "color": "#2fca73",
    "note": "종목 비중 상한으로 남은 주식 몫"
   },
@@ -53,7 +53,7 @@
    "label": "현금성 (CMA·파킹통장)",
    "pct": 8.0,
    "color": "#6b7280",
-   "note": "바로 꺼낼 수 있는 자금 · 분할매수 2·3차 미체결분(최대 42%p)도 체결 전까지 여기서 대기"
+   "note": "바로 꺼낼 수 있는 자금 · 분할매수 2·3차 미체결분(최대 39%p)도 체결 전까지 여기서 대기"
   }
  ],
  "sectors": [
@@ -64,68 +64,68 @@
     {
      "code": "005930",
      "name": "삼성전자",
-     "pct": 13.7,
+     "pct": 13.6,
      "bucket": "코어"
     },
     {
      "code": "000660",
      "name": "SK하이닉스",
-     "pct": 10.3,
+     "pct": 10.4,
      "bucket": "코어"
     }
    ]
   },
   {
    "sector": "기계",
-   "pct": 10.2,
+   "pct": 11.0,
    "stocks": [
     {
      "code": "267270",
      "name": "HD건설기계",
-     "pct": 10.2,
+     "pct": 11.0,
+     "bucket": "코어"
+    }
+   ]
+  },
+  {
+   "sector": "석유와가스",
+   "pct": 8.2,
+   "stocks": [
+    {
+     "code": "078930",
+     "name": "GS",
+     "pct": 8.2,
      "bucket": "코어"
     }
    ]
   },
   {
    "sector": "가정용기기와용품",
-   "pct": 10.1,
+   "pct": 8.0,
    "stocks": [
     {
      "code": "009450",
      "name": "경동나비엔",
-     "pct": 10.1,
+     "pct": 8,
      "bucket": "새틀라이트"
     }
    ]
   },
   {
-   "sector": "비철금속",
-   "pct": 7.9,
+   "sector": "통신장비",
+   "pct": 4.0,
    "stocks": [
     {
-     "code": "103140",
-     "name": "풍산",
-     "pct": 7.9,
+     "code": "264450",
+     "name": "유비쿼스",
+     "pct": 4.0,
      "bucket": "새틀라이트"
-    }
-   ]
-  },
-  {
-   "sector": "석유와가스",
-   "pct": 7.3,
-   "stocks": [
-    {
-     "code": "078930",
-     "name": "GS",
-     "pct": 7.3,
-     "bucket": "코어"
     }
    ]
   },
   {
    "sector": "지수 ETF(코스피200)",
-   "pct": 0.5,
+   "pct": 4.8,
    "stocks": [],
    "etf": true
   }
@@ -136,65 +136,78 @@
    "name": "삼성전자",
    "sector": "반도체와반도체장비",
    "group": "삼성",
-   "total": 88.0,
+   "total": 87.6,
    "grade": "green",
-   "mcap_eok": 10026368.0,
+   "mcap_eok": 10494070.0,
    "bucket": "코어",
    "holdco": false,
    "status": "in",
    "why": "코어 후보 중 점수 1위",
-   "weight_pct": 13.7
-  },
-  {
-   "code": "009450",
-   "name": "경동나비엔",
-   "sector": "가정용기기와용품",
-   "group": "경동나비엔",
-   "total": 81.6,
-   "grade": "green",
-   "mcap_eok": 8799.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "in",
-   "why": "새틀라이트 후보 중 점수 1위",
-   "weight_pct": 10.1
+   "weight_pct": 13.6
   },
   {
    "code": "000660",
    "name": "SK하이닉스",
    "sector": "반도체와반도체장비",
    "group": "SK",
-   "total": 81.3,
+   "total": 81.0,
    "grade": "green",
-   "mcap_eok": 7456730.0,
+   "mcap_eok": 7852538.0,
    "bucket": "코어",
    "holdco": false,
    "status": "in",
    "why": "코어 후보 중 점수 2위",
-   "weight_pct": 10.3
+   "weight_pct": 10.4
+  },
+  {
+   "code": "009450",
+   "name": "경동나비엔",
+   "sector": "가정용기기와용품",
+   "group": "경동나비엔",
+   "total": 79.6,
+   "grade": "green",
+   "mcap_eok": 9076.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "in",
+   "why": "새틀라이트 후보 중 점수 1위",
+   "weight_pct": 8
+  },
+  {
+   "code": "264450",
+   "name": "유비쿼스",
+   "sector": "통신장비",
+   "group": "유비쿼스",
+   "total": 79.0,
+   "grade": "green",
+   "mcap_eok": 1401.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "in",
+   "why": "새틀라이트 후보 중 점수 2위",
+   "weight_pct": 4.0
   },
   {
    "code": "103140",
    "name": "풍산",
    "sector": "비철금속",
    "group": "풍산",
-   "total": 79.4,
+   "total": 76.9,
    "grade": "green",
-   "mcap_eok": 12681.0,
+   "mcap_eok": 13508.0,
    "bucket": "새틀라이트",
    "holdco": false,
-   "status": "in",
-   "why": "새틀라이트 후보 중 점수 2위",
-   "weight_pct": 7.9
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
   {
    "code": "002900",
    "name": "TYM",
    "sector": "기계",
    "group": "TYM",
-   "total": 76.0,
+   "total": 74.9,
    "grade": "green",
-   "mcap_eok": 2823.0,
+   "mcap_eok": 3018.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -205,66 +218,53 @@
    "name": "SK스퀘어",
    "sector": "반도체와반도체장비",
    "group": "SK",
-   "total": 75.7,
+   "total": 74.3,
    "grade": "green",
-   "mcap_eok": 856187.0,
+   "mcap_eok": 906318.0,
    "bucket": "코어",
    "holdco": true,
    "status": "out",
    "why": "같은 SK 그룹(SK하이닉스)이 이미 들어감 — 그룹 중복 방지"
   },
   {
-   "code": "267270",
-   "name": "HD건설기계",
-   "sector": "기계",
-   "group": "HD현대",
-   "total": 75.6,
+   "code": "100120",
+   "name": "뷰웍스",
+   "sector": "건강관리장비와용품",
+   "group": "뷰웍스",
+   "total": 74.2,
    "grade": "green",
-   "mcap_eok": 35433.0,
-   "bucket": "코어",
+   "mcap_eok": 2342.0,
+   "bucket": "새틀라이트",
    "holdco": false,
-   "status": "in",
-   "why": "코어 후보 중 점수 3위",
-   "weight_pct": 10.2
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
   {
    "code": "016580",
    "name": "환인제약",
    "sector": "제약",
    "group": "환인제약",
-   "total": 73.8,
+   "total": 74.0,
    "grade": "green",
-   "mcap_eok": 1983.0,
+   "mcap_eok": 1992.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
   {
-   "code": "033500",
-   "name": "동성화인텍",
-   "sector": "화학",
-   "group": "동성화인텍",
-   "total": 73.5,
+   "code": "267270",
+   "name": "HD건설기계",
+   "sector": "기계",
+   "group": "HD현대",
+   "total": 72.8,
    "grade": "green",
-   "mcap_eok": 3497.0,
-   "bucket": "새틀라이트",
+   "mcap_eok": 38093.0,
+   "bucket": "코어",
    "holdco": false,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
-  },
-  {
-   "code": "100120",
-   "name": "뷰웍스",
-   "sector": "건강관리장비와용품",
-   "group": "뷰웍스",
-   "total": 72.4,
-   "grade": "green",
-   "mcap_eok": 2243.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+   "status": "in",
+   "why": "코어 후보 중 점수 3위",
+   "weight_pct": 11.0
   },
   {
    "code": "382800",
@@ -273,33 +273,20 @@
    "group": "지앤비에스 에코",
    "total": 72.4,
    "grade": "green",
-   "mcap_eok": 1240.0,
+   "mcap_eok": 1350.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
   },
   {
-   "code": "267250",
-   "name": "HD현대",
-   "sector": "조선",
-   "group": "HD현대",
-   "total": 72.3,
+   "code": "064850",
+   "name": "에프앤가이드",
+   "sector": "IT서비스",
+   "group": "에프앤가이드",
+   "total": 72.1,
    "grade": "green",
-   "mcap_eok": 89973.0,
-   "bucket": "코어",
-   "holdco": true,
-   "status": "out",
-   "why": "같은 HD현대 그룹(HD건설기계)이 이미 들어감 — 그룹 중복 방지"
-  },
-  {
-   "code": "001120",
-   "name": "LX인터내셔널",
-   "sector": "무역회사와판매업체",
-   "group": "LX",
-   "total": 71.8,
-   "grade": "green",
-   "mcap_eok": 12326.0,
+   "mcap_eok": 1574.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -310,9 +297,48 @@
    "name": "클리오",
    "sector": "화장품",
    "group": "클리오",
-   "total": 71.8,
+   "total": 72.0,
    "grade": "green",
-   "mcap_eok": 1986.0,
+   "mcap_eok": 2020.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "077360",
+   "name": "덕산하이메탈",
+   "sector": "반도체와반도체장비",
+   "group": "덕산하이메탈",
+   "total": 71.9,
+   "grade": "green",
+   "mcap_eok": 3294.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
+  },
+  {
+   "code": "034830",
+   "name": "한국토지신탁",
+   "sector": "부동산",
+   "group": "한국토지신탁",
+   "total": 71.5,
+   "grade": "green",
+   "mcap_eok": 2487.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "001120",
+   "name": "LX인터내셔널",
+   "sector": "무역회사와판매업체",
+   "group": "LX",
+   "total": 70.9,
+   "grade": "green",
+   "mcap_eok": 12713.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -323,9 +349,9 @@
    "name": "저스템",
    "sector": "반도체와반도체장비",
    "group": "저스템",
-   "total": 70.9,
+   "total": 70.6,
    "grade": "green",
-   "mcap_eok": 1996.0,
+   "mcap_eok": 2187.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -336,74 +362,22 @@
    "name": "케이씨",
    "sector": "반도체와반도체장비",
    "group": "케이씨",
-   "total": 70.8,
+   "total": 69.6,
    "grade": "green",
-   "mcap_eok": 4998.0,
+   "mcap_eok": 5444.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
   },
   {
-   "code": "000210",
-   "name": "DL",
-   "sector": "화학",
-   "group": "DL",
-   "total": 70.3,
-   "grade": "green",
-   "mcap_eok": 8445.0,
-   "bucket": "새틀라이트",
-   "holdco": true,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
-  },
-  {
-   "code": "012630",
-   "name": "HDC",
-   "sector": "건설",
-   "group": "HDC",
-   "total": 70.2,
-   "grade": "green",
-   "mcap_eok": 10731.0,
-   "bucket": "새틀라이트",
-   "holdco": true,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
-  },
-  {
-   "code": "000370",
-   "name": "한화손해보험",
-   "sector": "손해보험",
-   "group": "한화",
-   "total": 70.1,
-   "grade": "green",
-   "mcap_eok": 6783.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
-  },
-  {
-   "code": "243840",
-   "name": "신흥에스이씨",
-   "sector": "전기제품",
-   "group": "신흥에스이씨",
-   "total": 70.0,
-   "grade": "green",
-   "mcap_eok": 1400.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
-  },
-  {
    "code": "067310",
    "name": "하나마이크론",
    "sector": "반도체와반도체장비",
    "group": "하나마이크론",
-   "total": 69.6,
-   "grade": "yellow",
-   "mcap_eok": 13531.0,
+   "total": 68.9,
+   "grade": "green",
+   "mcap_eok": 15193.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -414,22 +388,100 @@
    "name": "유니셈",
    "sector": "반도체와반도체장비",
    "group": "유니셈",
-   "total": 69.3,
-   "grade": "yellow",
-   "mcap_eok": 2321.0,
+   "total": 68.9,
+   "grade": "green",
+   "mcap_eok": 2496.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
   },
   {
-   "code": "019210",
-   "name": "와이지-원",
-   "sector": "기계",
-   "group": "와이지-원",
-   "total": 69.0,
+   "code": "267250",
+   "name": "HD현대",
+   "sector": "조선",
+   "group": "HD현대",
+   "total": 68.7,
    "grade": "yellow",
-   "mcap_eok": 3351.0,
+   "mcap_eok": 94081.0,
+   "bucket": "코어",
+   "holdco": true,
+   "status": "out",
+   "why": "같은 HD현대 그룹(HD건설기계)이 이미 들어감 — 그룹 중복 방지"
+  },
+  {
+   "code": "248070",
+   "name": "솔루엠",
+   "sector": "전자장비와기기",
+   "group": "솔루엠",
+   "total": 68.6,
+   "grade": "yellow",
+   "mcap_eok": 4653.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "306200",
+   "name": "세아제강",
+   "sector": "철강",
+   "group": "세아",
+   "total": 68.3,
+   "grade": "yellow",
+   "mcap_eok": 2995.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "043150",
+   "name": "바텍",
+   "sector": "건강관리장비와용품",
+   "group": "바텍",
+   "total": 68.2,
+   "grade": "yellow",
+   "mcap_eok": 2545.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "071280",
+   "name": "로체시스템즈",
+   "sector": "반도체와반도체장비",
+   "group": "로체시스템즈",
+   "total": 68.2,
+   "grade": "yellow",
+   "mcap_eok": 1230.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
+  },
+  {
+   "code": "000370",
+   "name": "한화손해보험",
+   "sector": "손해보험",
+   "group": "한화",
+   "total": 67.9,
+   "grade": "yellow",
+   "mcap_eok": 7098.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "240550",
+   "name": "동방메디컬",
+   "sector": "건강관리장비와용품",
+   "group": "동방메디컬",
+   "total": 67.9,
+   "grade": "yellow",
+   "mcap_eok": 1225.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -440,100 +492,139 @@
    "name": "유니퀘스트",
    "sector": "반도체와반도체장비",
    "group": "유니퀘스트",
-   "total": 68.8,
+   "total": 67.5,
    "grade": "yellow",
-   "mcap_eok": 2024.0,
+   "mcap_eok": 2277.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
   },
   {
-   "code": "001230",
-   "name": "동국홀딩스",
-   "sector": "철강",
-   "group": "동국",
-   "total": 68.7,
+   "code": "170900",
+   "name": "동아에스티",
+   "sector": "제약",
+   "group": "동아에스티",
+   "total": 67.3,
    "grade": "yellow",
-   "mcap_eok": 2525.0,
+   "mcap_eok": 3307.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "078520",
+   "name": "에이블씨엔씨",
+   "sector": "화장품",
+   "group": "에이블씨엔씨",
+   "total": 66.8,
+   "grade": "yellow",
+   "mcap_eok": 2237.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "147830",
+   "name": "제룡산업",
+   "sector": "전기장비",
+   "group": "제룡산업",
+   "total": 66.8,
+   "grade": "yellow",
+   "mcap_eok": 1088.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "019210",
+   "name": "와이지-원",
+   "sector": "기계",
+   "group": "와이지-원",
+   "total": 66.6,
+   "grade": "yellow",
+   "mcap_eok": 3641.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "300080",
+   "name": "플리토",
+   "sector": "양방향미디어와서비스",
+   "group": "플리토",
+   "total": 66.6,
+   "grade": "yellow",
+   "mcap_eok": 1210.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "000210",
+   "name": "DL",
+   "sector": "화학",
+   "group": "DL",
+   "total": 66.2,
+   "grade": "yellow",
+   "mcap_eok": 9189.0,
    "bucket": "새틀라이트",
    "holdco": true,
    "status": "out",
    "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
   {
-   "code": "077360",
-   "name": "덕산하이메탈",
-   "sector": "반도체와반도체장비",
-   "group": "덕산하이메탈",
-   "total": 68.7,
-   "grade": "yellow",
-   "mcap_eok": 2985.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
-  },
-  {
    "code": "144960",
    "name": "뉴파워프라즈마",
    "sector": "반도체와반도체장비",
    "group": "뉴파워프라즈마",
-   "total": 68.4,
+   "total": 65.8,
    "grade": "yellow",
-   "mcap_eok": 4028.0,
+   "mcap_eok": 4221.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
   },
   {
-   "code": "071280",
-   "name": "로체시스템즈",
+   "code": "074600",
+   "name": "원익QnC",
    "sector": "반도체와반도체장비",
-   "group": "로체시스템즈",
-   "total": 68.3,
-   "grade": "yellow",
-   "mcap_eok": 1182.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
-  },
-  {
-   "code": "034730",
-   "name": "SK",
-   "sector": "석유와가스",
-   "group": "SK",
-   "total": 67.7,
-   "grade": "yellow",
-   "mcap_eok": 311399.0,
-   "bucket": "코어",
-   "holdco": true,
-   "status": "out",
-   "why": "같은 SK 그룹(SK하이닉스)이 이미 들어감 — 그룹 중복 방지"
-  },
-  {
-   "code": "011930",
-   "name": "신성이엔지",
-   "sector": "반도체와반도체장비",
-   "group": "신성이엔지",
-   "total": 66.1,
-   "grade": "yellow",
-   "mcap_eok": 1980.0,
-   "bucket": "새틀라이트",
-   "holdco": false,
-   "status": "out",
-   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
-  },
-  {
-   "code": "263750",
-   "name": "펄어비스",
-   "sector": "게임엔터테인먼트",
-   "group": "펄어비스",
+   "group": "원익",
    "total": 65.7,
    "grade": "yellow",
-   "mcap_eok": 17596.0,
+   "mcap_eok": 6703.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "반도체와반도체장비 섹터는 이미 2종목 — 섹터 쏠림 방지"
+  },
+  {
+   "code": "005960",
+   "name": "동부건설",
+   "sector": "건설",
+   "group": "동부건설",
+   "total": 65.5,
+   "grade": "yellow",
+   "mcap_eok": 1400.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "078150",
+   "name": "HB테크놀러지",
+   "sector": "디스플레이장비및부품",
+   "group": "HB테크놀러지",
+   "total": 65.5,
+   "grade": "yellow",
+   "mcap_eok": 1683.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -546,20 +637,20 @@
    "group": "IPARK현대산업개발",
    "total": 65.4,
    "grade": "yellow",
-   "mcap_eok": 15521.0,
+   "mcap_eok": 15291.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
    "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
   {
-   "code": "248070",
-   "name": "솔루엠",
-   "sector": "전자장비와기기",
-   "group": "솔루엠",
-   "total": 65.4,
+   "code": "192440",
+   "name": "슈피겐코리아",
+   "sector": "핸드셋",
+   "group": "슈피겐코리아",
+   "total": 65.1,
    "grade": "yellow",
-   "mcap_eok": 4399.0,
+   "mcap_eok": 1967.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -570,11 +661,24 @@
    "name": "송원산업",
    "sector": "화학",
    "group": "송원산업",
-   "total": 65.4,
+   "total": 64.9,
    "grade": "yellow",
-   "mcap_eok": 2321.0,
+   "mcap_eok": 2378.0,
    "bucket": "새틀라이트",
    "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "012630",
+   "name": "HDC",
+   "sector": "건설",
+   "group": "HDC",
+   "total": 64.8,
+   "grade": "yellow",
+   "mcap_eok": 11857.0,
+   "bucket": "새틀라이트",
+   "holdco": true,
    "status": "out",
    "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
   },
@@ -583,9 +687,48 @@
    "name": "일진홀딩스",
    "sector": "전기장비",
    "group": "일진",
-   "total": 65.3,
+   "total": 64.8,
    "grade": "yellow",
-   "mcap_eok": 3050.0,
+   "mcap_eok": 3208.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "000020",
+   "name": "동화약품",
+   "sector": "제약",
+   "group": "동화약품",
+   "total": 64.4,
+   "grade": "yellow",
+   "mcap_eok": 1405.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "194700",
+   "name": "노바렉스",
+   "sector": "건강관리업체및서비스",
+   "group": "노바렉스",
+   "total": 64.3,
+   "grade": "yellow",
+   "mcap_eok": 1590.0,
+   "bucket": "새틀라이트",
+   "holdco": false,
+   "status": "out",
+   "why": "새틀라이트 정원 2종목이 점수 더 높은 종목으로 참"
+  },
+  {
+   "code": "037460",
+   "name": "삼지전자",
+   "sector": "통신장비",
+   "group": "삼지전자",
+   "total": 63.9,
+   "grade": "yellow",
+   "mcap_eok": 4063.0,
    "bucket": "새틀라이트",
    "holdco": false,
    "status": "out",
@@ -596,14 +739,14 @@
    "name": "GS",
    "sector": "석유와가스",
    "group": "GS",
-   "total": 65.2,
+   "total": 63.8,
    "grade": "yellow",
-   "mcap_eok": 63633.0,
+   "mcap_eok": 65213.0,
    "bucket": "코어",
    "holdco": true,
    "status": "in",
    "why": "코어 후보 중 점수 4위",
-   "weight_pct": 7.3
+   "weight_pct": 8.2
   }
  ],
  "rules": {
@@ -620,20 +763,20 @@
    "name": "삼성전자",
    "sector": "반도체와반도체장비",
    "bucket": "코어",
-   "weight_pct": 13.7,
-   "weight_why": "점수 88 · 안전마진 +187% · 변동성 69% → 13.7% (한 종목 상한 20% · 섹터 상한으로 축소)",
-   "price": 171500.0,
+   "weight_pct": 13.6,
+   "weight_why": "점수 88 · 안전마진 +211% · 변동성 70% → 13.6% (한 종목 상한 20% · 섹터 상한으로 축소)",
+   "price": 179500.0,
    "target": 412363.8,
    "target_source": "보수적 목표가",
-   "total": 88.0,
+   "total": 87.6,
    "grade": "green",
-   "reason": "안전마진 +187%, 보수적 목표가 대비 +140%, 하락 추세 지속",
+   "reason": "안전마진 +211%, 보수적 목표가 대비 +130%, 하락 추세 지속",
    "is_holdco": false,
    "plan": {
     "entries": [
      {
       "step": 1,
-      "price": 171500,
+      "price": 179500,
       "fraction": 0.3,
       "basis": "현재가"
      },
@@ -645,68 +788,20 @@
      },
      {
       "step": 3,
-      "price": 154300,
+      "price": 161500,
       "fraction": 0.4,
       "basis": "현재가 -10%"
      }
     ],
-    "avg_entry": 163200,
-    "stop": 150100,
+    "avg_entry": 168500,
+    "stop": 155000,
     "stop_basis": "평균 진입가 -8%",
     "supports": [
      166000
     ],
-    "tp1": 292000,
+    "tp1": 296000,
     "tp1_fraction": 0.333,
     "tp2": 412500,
-    "trailing_pct": -10,
-    "note": null
-   }
-  },
-  {
-   "code": "000660",
-   "name": "SK하이닉스",
-   "sector": "반도체와반도체장비",
-   "bucket": "코어",
-   "weight_pct": 10.3,
-   "weight_why": "점수 81 · 안전마진 +262% · 변동성 84% → 10.3% (한 종목 상한 20% · 섹터 상한으로 축소)",
-   "price": 1055000.0,
-   "target": 2636181.9,
-   "target_source": "보수적 목표가",
-   "total": 81.3,
-   "grade": "green",
-   "reason": "안전마진 +262%, 보수적 목표가 대비 +150%, 하락 추세 지속",
-   "is_holdco": false,
-   "plan": {
-    "entries": [
-     {
-      "step": 1,
-      "price": 1055000,
-      "fraction": 0.3,
-      "basis": "현재가"
-     },
-     {
-      "step": 2,
-      "price": 1008000,
-      "fraction": 0.3,
-      "basis": "60일 저점(지지선) 부근"
-     },
-     {
-      "step": 3,
-      "price": 949000,
-      "fraction": 0.4,
-      "basis": "현재가 -10%"
-     }
-    ],
-    "avg_entry": 998000,
-    "stop": 918000,
-    "stop_basis": "평균 진입가 -8%",
-    "supports": [
-     1003000
-    ],
-    "tp1": 1846000,
-    "tp1_fraction": 0.333,
-    "tp2": 2636000,
     "trailing_pct": -10,
     "note": null
    }
@@ -716,141 +811,93 @@
    "name": "HD건설기계",
    "sector": "기계",
    "bucket": "코어",
-   "weight_pct": 10.2,
-   "weight_why": "점수 76 · 안전마진 +68% · 변동성 68% → 10.2% (한 종목 상한 20%)",
-   "price": 74600.0,
-   "target": 125262.6,
-   "target_source": "내재가치",
-   "total": 75.6,
+   "weight_pct": 11.0,
+   "weight_why": "점수 73 · 안전마진 +62% · 변동성 70% → 11.0% (한 종목 상한 20%)",
+   "price": 80200.0,
+   "target": 129600.0,
+   "target_source": "보수적 목표가",
+   "total": 72.8,
    "grade": "green",
-   "reason": "안전마진 +68%, 내재가치 대비 +68%, 하락 추세 지속",
+   "reason": "안전마진 +62%, PER 업종 대비 52% 할인, 하락 추세 지속",
    "is_holdco": false,
    "plan": {
     "entries": [
      {
       "step": 1,
-      "price": 74600,
+      "price": 80200,
       "fraction": 0.3,
       "basis": "현재가"
      },
      {
       "step": 2,
-      "price": 72700,
+      "price": 76100,
       "fraction": 0.3,
-      "basis": "60일 저점(지지선) 부근"
+      "basis": "현재가 -5%"
      },
      {
       "step": 3,
-      "price": 67100,
+      "price": 72700,
       "fraction": 0.4,
-      "basis": "현재가 -10%"
+      "basis": "60일 저점(지지선) 부근"
      }
     ],
-    "avg_entry": 71000,
-    "stop": 65300,
-    "stop_basis": "평균 진입가 -8%",
+    "avg_entry": 76000,
+    "stop": 70900,
+    "stop_basis": "지지선(72,400원) -2% 이탈",
     "supports": [
      72400
     ],
-    "tp1": 99900,
+    "tp1": 104900,
     "tp1_fraction": 0.333,
-    "tp2": 125300,
+    "tp2": 129600,
     "trailing_pct": -10,
     "note": null
    }
   },
   {
-   "code": "009450",
-   "name": "경동나비엔",
-   "sector": "가정용기기와용품",
-   "bucket": "새틀라이트",
-   "weight_pct": 10.1,
-   "weight_why": "점수 82 · 안전마진 +53% · 변동성 28% → 10.1% (한 종목 상한 15%)",
-   "price": 60400.0,
-   "target": 92439.116,
-   "target_source": "내재가치",
-   "total": 81.6,
-   "grade": "green",
-   "reason": "안전마진 +53%, 2026E EPS +112%",
-   "is_holdco": false,
-   "plan": {
-    "entries": [
-     {
-      "step": 1,
-      "price": 60400,
-      "fraction": 0.3,
-      "basis": "현재가"
-     },
-     {
-      "step": 2,
-      "price": 57000,
-      "fraction": 0.3,
-      "basis": "60일 저점(지지선) 부근"
-     },
-     {
-      "step": 3,
-      "price": 54300,
-      "fraction": 0.4,
-      "basis": "현재가 -10%"
-     }
-    ],
-    "avg_entry": 56900,
-    "stop": 52300,
-    "stop_basis": "평균 진입가 -8%",
-    "supports": [
-     56800
-    ],
-    "tp1": 76400,
-    "tp1_fraction": 0.333,
-    "tp2": 92400,
-    "trailing_pct": -10,
-    "note": null
-   }
-  },
-  {
-   "code": "103140",
-   "name": "풍산",
-   "sector": "비철금속",
-   "bucket": "새틀라이트",
-   "weight_pct": 7.9,
-   "weight_why": "점수 79 · 안전마진 +110% · 변동성 46% → 7.9% (한 종목 상한 15%)",
-   "price": 45250.0,
-   "target": 79020.0,
+   "code": "000660",
+   "name": "SK하이닉스",
+   "sector": "반도체와반도체장비",
+   "bucket": "코어",
+   "weight_pct": 10.4,
+   "weight_why": "점수 81 · 안전마진 +291% · 변동성 85% → 10.4% (한 종목 상한 20% · 섹터 상한으로 축소)",
+   "price": 1111000.0,
+   "target": 2636181.9,
    "target_source": "보수적 목표가",
-   "total": 79.4,
+   "total": 81.0,
    "grade": "green",
-   "reason": "안전마진 +110%, 보수적 목표가 대비 +75%, 하락 추세 지속",
+   "reason": "안전마진 +291%, 보수적 목표가 대비 +137%, 하락 추세 지속",
    "is_holdco": false,
    "plan": {
     "entries": [
      {
       "step": 1,
-      "price": 45250,
+      "price": 1111000,
       "fraction": 0.3,
       "basis": "현재가"
      },
      {
       "step": 2,
-      "price": 43600,
+      "price": 1055000,
       "fraction": 0.3,
-      "basis": "60일 저점(지지선) 부근"
+      "basis": "현재가 -5%"
      },
      {
       "step": 3,
-      "price": 40700,
+      "price": 1008000,
       "fraction": 0.4,
-      "basis": "현재가 -10%"
+      "basis": "60일 저점(지지선) 부근"
      }
     ],
-    "avg_entry": 42950,
-    "stop": 39500,
-    "stop_basis": "평균 진입가 -8%",
+    "avg_entry": 1053000,
+    "stop": 982000,
+    "stop_basis": "지지선(1,003,000원) -2% 이탈",
     "supports": [
-     43400
+     1003000
     ],
-    "tp1": 62100,
+    "tp1": 1874000,
     "tp1_fraction": 0.333,
-    "tp2": 79000,
+    "tp2": 2636000,
     "trailing_pct": -10,
     "note": null
    }
@@ -860,20 +907,20 @@
    "name": "GS",
    "sector": "석유와가스",
    "bucket": "코어",
-   "weight_pct": 7.3,
-   "weight_why": "점수 65 · 안전마진 +93% · 변동성 48% → 7.3% (한 종목 상한 20%)",
-   "price": 68500.0,
+   "weight_pct": 8.2,
+   "weight_why": "점수 64 · 안전마진 +89% · 변동성 48% → 8.2% (한 종목 상한 20%)",
+   "price": 70200.0,
    "target": 84720.24,
    "target_source": "보수적 목표가",
-   "total": 65.2,
+   "total": 63.8,
    "grade": "yellow",
-   "reason": "안전마진 +93%, PER 지주사 대비 68% 할인, 하락 추세 지속",
+   "reason": "안전마진 +89%, PER 지주사 대비 67% 할인, 하락 추세 지속",
    "is_holdco": true,
    "plan": {
     "entries": [
      {
       "step": 1,
-      "price": 68500,
+      "price": 70200,
       "fraction": 0.3,
       "basis": "현재가"
      },
@@ -885,21 +932,117 @@
      },
      {
       "step": 3,
-      "price": 61100,
+      "price": 63100,
       "fraction": 0.4,
-      "basis": "120일 저점(지지선) 부근"
+      "basis": "현재가 -10%"
      }
     ],
-    "avg_entry": 64900,
-    "stop": 59600,
+    "avg_entry": 66200,
+    "stop": 60800,
     "stop_basis": "평균 진입가 -8%",
     "supports": [
      66000,
      60800
     ],
-    "tp1": 76600,
+    "tp1": 77500,
     "tp1_fraction": 0.333,
     "tp2": 84700,
+    "trailing_pct": -10,
+    "note": null
+   }
+  },
+  {
+   "code": "009450",
+   "name": "경동나비엔",
+   "sector": "가정용기기와용품",
+   "bucket": "새틀라이트",
+   "weight_pct": 8,
+   "weight_why": "점수 80 · 안전마진 +48% · 변동성 29% → 8.0% (한 종목 상한 8% · 상한 도달)",
+   "price": 62300.0,
+   "target": 92282.528,
+   "target_source": "내재가치",
+   "total": 79.6,
+   "grade": "green",
+   "reason": "2026E EPS +112%, 안전마진 +48%",
+   "is_holdco": false,
+   "plan": {
+    "entries": [
+     {
+      "step": 1,
+      "price": 62300,
+      "fraction": 0.3,
+      "basis": "현재가"
+     },
+     {
+      "step": 2,
+      "price": 59100,
+      "fraction": 0.3,
+      "basis": "현재가 -5%"
+     },
+     {
+      "step": 3,
+      "price": 57000,
+      "fraction": 0.4,
+      "basis": "60일 저점(지지선) 부근"
+     }
+    ],
+    "avg_entry": 59200,
+    "stop": 55600,
+    "stop_basis": "지지선(56,800원) -2% 이탈",
+    "supports": [
+     56800
+    ],
+    "tp1": 77300,
+    "tp1_fraction": 0.333,
+    "tp2": 92300,
+    "trailing_pct": -10,
+    "note": null
+   }
+  },
+  {
+   "code": "264450",
+   "name": "유비쿼스",
+   "sector": "통신장비",
+   "bucket": "새틀라이트",
+   "weight_pct": 4.0,
+   "weight_why": "점수 79 · 변동성 42% → 4.0% (한 종목 상한 8%)",
+   "price": 9550.0,
+   "target": 19800.0,
+   "target_source": "보수적 목표가",
+   "total": 79.0,
+   "grade": "green",
+   "reason": "최근 수주 공시 매출 대비 134%, 보수적 목표가 대비 +107%",
+   "is_holdco": false,
+   "plan": {
+    "entries": [
+     {
+      "step": 1,
+      "price": 9550,
+      "fraction": 0.3,
+      "basis": "현재가"
+     },
+     {
+      "step": 2,
+      "price": 9070,
+      "fraction": 0.3,
+      "basis": "현재가 -5%"
+     },
+     {
+      "step": 3,
+      "price": 8710,
+      "fraction": 0.4,
+      "basis": "60일 저점(지지선) 부근"
+     }
+    ],
+    "avg_entry": 9070,
+    "stop": 8490,
+    "stop_basis": "지지선(8,670원) -2% 이탈",
+    "supports": [
+     8670
+    ],
+    "tp1": 14680,
+    "tp1_fraction": 0.333,
+    "tp2": 19800,
     "trailing_pct": -10,
     "note": null
    }
